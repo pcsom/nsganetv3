@@ -1,0 +1,67 @@
+# NSGANetV3 Configuration File
+
+[search]
+# Number of search iterations 
+iterations = 30
+# Initial sample size for design of experiments (DOE)
+n_doe = 100
+# Number of architectures to evaluate in each iteration
+n_iter = 8
+# Secondary objective to optimize (flops/params/cpu/gpu)
+sec_obj = "flops"
+# Which surrogate model to use (rbf/gp/cart/mlp/as)
+predictor = "as"
+
+[dataset]
+# Dataset name (imagenet/cifar10/cifar100/etc)
+dataset = "imagenet"
+# Number of classes in the dataset
+n_classes = 1000
+# Number of training epochs for architectures
+n_epochs = 5
+# Validation set size (randomly sampled from training set)
+vld_size = 10000
+# Evaluate on test set after training
+test = false
+
+[training]
+# Training batch size
+trn_batch_size = 128
+# Validation batch size  
+vld_batch_size = 200
+# Number of data loader workers
+n_workers = 4
+
+[evolutionary]
+# Population size for candidate selection optimization
+pop_size = 40
+# Number of generations for candidate selection
+n_gens = 20
+# Crossover probability for integer two-point crossover
+crossover_prob = 0.9
+# Mutation eta parameter for integer polynomial mutation
+mutation_eta = 1.0
+
+[slurm]
+# SLURM job name prefix
+job_name = "nsganetv3"
+# Number of nodes per evaluation job
+nodes = 1
+# Number of CPU cores per job
+cores = 8
+# Memory per job
+memory = "24GB"
+# Job time limit for evaluation
+job_time = "08:00:00"
+# Conda environment name
+env_name = "nas"
+# Allowed GPU types
+gpu_types = ["V100-16GB", "V100-32GB", "L40S", "A100-40GB", "H100", "A40", "H200"]
+
+[surrogate]
+# Enable GPU-based surrogate training
+enable_gpu_training = true
+# Surrogate training job time limit
+train_job_time = "02:00:00"
+# Surrogate training job memory
+train_memory = "16GB"
