@@ -1,0 +1,9 @@
+/home/hice1/glu49/.conda/envs/nas/lib/python3.12/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+Traceback (most recent call last):
+  File "/home/hice1/glu49/nsganetv3/msunas_slurm.py", line 13, in <module>
+    from evaluator import OFAEvaluator, get_net_info
+  File "/home/hice1/glu49/nsganetv3/evaluator.py", line 10, in <module>
+    from ofa.elastic_nn.networks import OFAMobileNetV3
+ModuleNotFoundError: No module named 'ofa.elastic_nn'
+ERROR conda.cli.main_run:execute(124): `conda run python -u msunas_slurm.py --save /home/hice1/glu49/search-test --data /storage/ice-shared/vip-vvk/data/imagenet --supernet_path /home/hice1/glu49/supernet/ofa_mbv3_d234_e346_k357_w1.0 --dataset imagenet --sec_obj flops --iterations 5 --predictor rbf` failed. (See above for error)

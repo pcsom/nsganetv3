@@ -8,11 +8,13 @@ from utils import get_correlation
 from evaluator import OFAEvaluator, get_net_info
 
 from pymoo.optimize import minimize
-from pymoo.model.problem import Problem
-from pymoo.factory import get_performance_indicator
-from pymoo.algorithms.so_genetic_algorithm import GA
+from pymoo.core.problem import Problem
+from pymoo.indicators.hv import HV
+from pymoo.algorithms.soo.nonconvex.ga import GA
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
-from pymoo.factory import get_algorithm, get_crossover, get_mutation
+from pymoo.core.crossover import Crossover
+from pymoo.core.mutation import Mutation
+from pymoo.core.sampling import Sampling
 
 from search_space.ofa import OFASearchSpace
 from acc_predictor.factory import get_acc_predictor

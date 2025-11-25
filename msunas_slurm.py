@@ -13,11 +13,13 @@ from utils import get_correlation
 from evaluator import OFAEvaluator, get_net_info
 
 from pymoo.optimize import minimize
-from pymoo.model.problem import Problem
-from pymoo.factory import get_performance_indicator
-from pymoo.algorithms.so_genetic_algorithm import GA
+from pymoo.core.problem import Problem
+from pymoo.indicators.hv import HV
+from pymoo.algorithms.soo.nonconvex.ga import GA
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
-from pymoo.factory import get_algorithm, get_crossover, get_mutation
+from pymoo.core.crossover import Crossover
+from pymoo.core.mutation import Mutation
+from pymoo.core.sampling import Sampling
 
 from search_space.ofa import OFASearchSpace
 from acc_predictor.factory import get_acc_predictor
@@ -41,9 +43,7 @@ class MSuNASSLURM(MSuNAS):
     """SLURM-adapted version of MSuNAS for HPC cluster execution"""
     
     def __init__(self, kwargs, config_path=None):
-        super().__init__(kwargs)
-        
-        # Load TOML configuration
+        # Load TOML configuration BEFORE calling parent init
         if config_path and os.path.exists(config_path):
             self.config = toml.load(config_path)
         else:
@@ -54,7 +54,17 @@ class MSuNASSLURM(MSuNAS):
             else:
                 self.config = self._get_default_config()
         
-        # Override config with any command line arguments
+        # Merge config values into kwargs (command line args take precedence)
+        # Only set from config if not already in kwargs
+        if 'n_doe' not in kwargs or kwargs['n_doe'] is None:
+            kwargs['n_doe'] = self.config['search']['n_doe']
+        if 'n_iter' not in kwargs or kwargs['n_iter'] is None:
+            kwargs['n_iter'] = self.config['search']['n_iter']
+        
+        # Call parent init with merged kwargs
+        super().__init__(kwargs)
+        
+        # Update config with final values from parent
         self._update_config_from_kwargs(kwargs)
         
         self.job_name = f'{JOB_NAME}_{os.path.basename(self.save_path)}'
@@ -110,22 +120,38 @@ class MSuNASSLURM(MSuNAS):
     
     def _update_config_from_kwargs(self, kwargs):
         """Update config with command line arguments"""
-        # Map command line args to config sections
-        search_mapping = ['iterations', 'n_doe', 'n_iter', 'sec_obj', 'predictor']
-        dataset_mapping = ['dataset', 'n_classes', 'n_epochs', 'vld_size', 'test']
-        training_mapping = ['trn_batch_size', 'vld_batch_size', 'n_workers']
+        # Note: Parent __init__ already popped values and set them as attributes
+        # We need to update config from those attributes
         
-        for key in search_mapping:
-            if hasattr(self, key):
-                self.config['search'][key] = getattr(self, key)
-        
-        for key in dataset_mapping:
-            if hasattr(self, key):
-                self.config['dataset'][key] = getattr(self, key)
-                
-        for key in training_mapping:
-            if hasattr(self, key):
-                self.config['training'][key] = getattr(self, key)
+        # Update config from attributes set by parent class
+        if hasattr(self, 'iterations') and self.iterations is not None:
+            self.config['search']['iterations'] = self.iterations
+        if hasattr(self, 'n_doe') and self.n_doe is not None:
+            self.config['search']['n_doe'] = self.n_doe
+        if hasattr(self, 'n_iter') and self.n_iter is not None:
+            self.config['search']['n_iter'] = self.n_iter
+        if hasattr(self, 'sec_obj') and self.sec_obj is not None:
+            self.config['search']['sec_obj'] = self.sec_obj
+        if hasattr(self, 'predictor') and self.predictor is not None:
+            self.config['search']['predictor'] = self.predictor
+            
+        if hasattr(self, 'dataset') and self.dataset is not None:
+            self.config['dataset']['dataset'] = self.dataset
+        if hasattr(self, 'n_classes') and self.n_classes is not None:
+            self.config['dataset']['n_classes'] = self.n_classes
+        if hasattr(self, 'n_epochs') and self.n_epochs is not None:
+            self.config['dataset']['n_epochs'] = self.n_epochs
+        if hasattr(self, 'vld_size') and self.vld_size is not None:
+            self.config['dataset']['vld_size'] = self.vld_size
+        if hasattr(self, 'test') and self.test is not None:
+            self.config['dataset']['test'] = self.test
+            
+        if hasattr(self, 'trn_batch_size') and self.trn_batch_size is not None:
+            self.config['training']['trn_batch_size'] = self.trn_batch_size
+        if hasattr(self, 'vld_batch_size') and self.vld_batch_size is not None:
+            self.config['training']['vld_batch_size'] = self.vld_batch_size
+        if hasattr(self, 'n_workers') and self.n_workers is not None:
+            self.config['training']['n_workers'] = self.n_workers
             
     def _save_search_config(self):
         """Save search configuration for evaluation scripts"""

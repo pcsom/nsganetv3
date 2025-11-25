@@ -7,9 +7,9 @@ import numpy as np
 import utils
 from codebase.networks import NSGANetV2
 from codebase.run_manager import get_run_config
-from ofa.elastic_nn.networks import OFAMobileNetV3
-from ofa.imagenet_codebase.run_manager import RunManager
-from ofa.elastic_nn.modules.dynamic_op import DynamicSeparableConv2d
+from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3
+from ofa.imagenet_classification.run_manager import RunManager
+from ofa.imagenet_classification.elastic_nn.modules.dynamic_op import DynamicSeparableConv2d
 
 import warnings
 warnings.simplefilter("ignore")

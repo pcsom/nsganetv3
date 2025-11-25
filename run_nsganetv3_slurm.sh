@@ -3,9 +3,9 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8GB
-#SBATCH --time=48:00:00
-#SBATCH --output="/storage/ice-shared/vip-vvk/data/AOT/%u/evolution_logs/nsganet.%A.%a.log"
-#SBATCH --error="/storage/ice-shared/vip-vvk/data/AOT/%u/evolution_logs/nsganet_error.%A.%a.log"
+#SBATCH --time=12:00:00
+#SBATCH --output=%x_%j.out
+#SBATCH --error=%x_%j.err
 
 # Parse command line arguments
 save_dir=""

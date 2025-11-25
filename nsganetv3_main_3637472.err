@@ -1,0 +1,10 @@
+
+CondaError: Run 'conda init' before 'conda deactivate'
+
+Traceback (most recent call last):
+  File "/home/hice1/glu49/nsganetv3/msunas_slurm.py", line 12, in <module>
+    from utils import get_correlation
+  File "/home/hice1/glu49/nsganetv3/utils.py", line 13, in <module>
+    from pymoo.model.mutation import Mutation
+ModuleNotFoundError: No module named 'pymoo.model'
+ERROR conda.cli.main_run:execute(124): `conda run python -u msunas_slurm.py --save /home/hice1/glu49/search-test --data /storage/ice-shared/vip-vvk/data/imagenet --supernet_path /home/hice1/glu49/supernet/ofa_mbv3_d234_e346_k357_w1.0 --dataset imagenet --sec_obj flops --iterations 5 --predictor rbf` failed. (See above for error)

@@ -1,0 +1,32 @@
+---------------------------------------
+Begin Slurm Prolog: Nov-23-2025 16:01:07
+Job ID:    3637597
+User ID:   glu49
+Account:   coc
+Job name:  nsganetv3_main
+Partition: pace-cpu
+QOS:       coe-ice
+---------------------------------------
+Starting NSGANetV3 with SLURM backend
+Configuration:
+  Save directory: /home/hice1/glu49/search-test
+  Dataset: imagenet
+  Data path: /storage/ice-shared/vip-vvk/data/imagenet
+  Supernet path: /home/hice1/glu49/supernet/ofa_mbv3_d234_e346_k357_w1.0
+  Secondary objective: flops
+  Iterations: 5
+  Predictor: rbf
+  Conda environment: nas
+NSGANetV3 search completed
+---------------------------------------
+Begin Slurm Epilog: Nov-23-2025 16:02:37
+Job ID:        3637597
+User ID:       glu49
+Account:       coc
+Job name:      nsganetv3_main
+Resources:     cpu=4,mem=8G,node=1
+Rsrc Used:     cput=00:06:04,vmem=0,walltime=00:01:31,mem=721528K,energy_used=0
+Partition:     pace-cpu
+QOS:           coe-ice
+Nodes:         atl1-1-03-007-26-2
+---------------------------------------
