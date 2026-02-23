@@ -155,3 +155,7 @@ training_corpus/
 corpus_*/
 quick_test.log
 quick_test.err
+production_*/
+fresh_test/
+status.json
+test_verify.sh
