@@ -13,10 +13,22 @@ module load cuda/12.1.1
 
 cd $SLURM_SUBMIT_DIR
 
+CORPUS_DIR="${CORPUS_DIR:-corpus_250}"
+CONFIG_PATH="$CORPUS_DIR/arch_0000/config.json"
+OUTPUT_DIR="$CORPUS_DIR/quick_test_output"
+SUPERNET_PATH="${SUPERNET_PATH:-/storage/ice-shared/vip-vvk/data/AOT/ofa_checkpoints/ofa_mbv3_d234_e346_k357_w1.0}"
+
+if [ ! -f "$CONFIG_PATH" ]; then
+    echo "Config not found: $CONFIG_PATH"
+    exit 1
+fi
+
+mkdir -p "$OUTPUT_DIR"
+
 $HOME/.conda/envs/nsganetv2-llm/bin/python train_imagenet.py /storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers \
     --model nsganetv2 \
-    --model-config test_corpus_5/arch_0000/config.json \
-    --initial-checkpoint checkpoints/ofa_mbv3_d234_e346_k357_w1.0 \
+    --model-config "$CONFIG_PATH" \
+    --initial-checkpoint "$SUPERNET_PATH" \
     --num-classes 102 \
     --epochs 2 \
     --batch-size 64 \
@@ -28,6 +40,6 @@ $HOME/.conda/envs/nsganetv2-llm/bin/python train_imagenet.py /storage/ice-shared
     --aa rand-m9-mstd0.5-inc1 \
     --remode pixel \
     --reprob 0.2 \
-    --output quick_test_output
+    --output "$OUTPUT_DIR"
 
 echo "Quick test completed"
