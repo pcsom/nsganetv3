@@ -16,7 +16,7 @@ cd $SLURM_SUBMIT_DIR
 CORPUS_DIR="${CORPUS_DIR:-corpus_250}"
 CONFIG_PATH="$CORPUS_DIR/arch_0000/config.json"
 OUTPUT_DIR="$CORPUS_DIR/quick_test_output"
-SUPERNET_PATH="${SUPERNET_PATH:-/storage/ice-shared/vip-vvk/data/AOT/ofa_checkpoints/ofa_mbv3_d234_e346_k357_w1.0}"
+SUPERNET_PATH="${SUPERNET_PATH:-checkpoints/ofa_mbv3_d234_e346_k357_w1.0}"
 
 if [ ! -f "$CONFIG_PATH" ]; then
     echo "Config not found: $CONFIG_PATH"

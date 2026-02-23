@@ -96,7 +96,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--corpus_dir', type=str, default='training_corpus')
     parser.add_argument('--supernet_path', type=str,
-                        default='/storage/ice-shared/vip-vvk/data/AOT/ofa_checkpoints/ofa_mbv3_d234_e346_k357_w1.0')
+                        default='checkpoints/ofa_mbv3_d234_e346_k357_w1.0')
     parser.add_argument('--data_path', type=str, 
                         default='/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers',
                         help='Path to dataset directory (VIP shared storage, accessible to all users)')
