@@ -10,9 +10,9 @@ import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 
-from pymoo.model.mutation import Mutation
-from pymoo.model.sampling import Sampling
-from pymoo.model.crossover import Crossover
+from pymoo.core.mutation import Mutation
+from pymoo.core.sampling import Sampling
+from pymoo.core.crossover import Crossover
 
 DEFAULT_CFG = {
     'gpus': '0', 'config': None, 'init': None, 'trn_batch_size': 128, 'vld_batch_size': 250, 'num_workers': 4,
@@ -252,7 +252,7 @@ def get_net_info(net, input_shape=(3, 224, 224), measure_latency=None, print_inf
     Modified from https://github.com/mit-han-lab/once-for-all/blob/
     35ddcb9ca30905829480770a6a282d49685aa282/ofa/imagenet_codebase/utils/pytorch_utils.py#L139
     """
-    from ofa.imagenet_codebase.utils.pytorch_utils import count_parameters, measure_net_latency
+    from ofa.imagenet_classification.utils.pytorch_utils import count_parameters, measure_net_latency
 
     # artificial input data
     inputs = torch.randn(1, 3, input_shape[-2], input_shape[-1])

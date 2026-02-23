@@ -126,9 +126,23 @@ def main():
         valid_data, batch_size=200, shuffle=False, pin_memory=True, num_workers=args.num_workers)
 
     net_config = json.load(open(args.model_config))
-    net = NSGANetV2.build_from_config(net_config, drop_connect_rate=args.drop_path)
-    init = torch.load(args.initial_checkpoint, map_location='cpu')['state_dict']
-    net.load_state_dict(init)
+    
+    if 'first_conv' not in net_config:
+        from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3
+        ofa_network = OFAMobileNetV3(
+            n_classes=1000,
+            dropout_rate=0, width_mult=1.0, ks_list=[3, 5, 7],
+            expand_ratio_list=[3, 4, 6], depth_list=[2, 3, 4])
+        init = torch.load(args.initial_checkpoint, map_location='cpu')['state_dict']
+        ofa_network.load_state_dict(init, strict=False)
+        
+        ofa_network.set_active_subnet(ks=net_config['ks'], e=net_config['e'], d=net_config['d'])
+        subnet = ofa_network.get_active_subnet(preserve_weight=True)
+        net = subnet
+    else:
+        net = NSGANetV2.build_from_config(net_config, drop_connect_rate=args.drop_path)
+        init = torch.load(args.initial_checkpoint, map_location='cpu')['state_dict']
+        net.load_state_dict(init)
 
     NSGANetV2.reset_classifier(
         net, last_channel=net.classifier.in_features,
