@@ -22,13 +22,3 @@ cd once-for-all && pip install -e .
 ```bash
 bash verify_setup.sh
 ```
-
-## Partition Authorization
-
-Ensure you have access to GPU partitions:
-
-```bash
-sinfo -p ice-gpu,coe-gpu -N | head -5
-```
-
-If coe-gpu returns nothing, you may still have access via COC account.
