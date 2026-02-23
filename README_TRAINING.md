@@ -4,9 +4,15 @@ Train NSGANetV2 architectures on Oxford Flowers-102 to generate ground truth acc
 
 ## Dataset
 
-- **Location:** `/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers/`
+- **Default Location:** `/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers/`
 - **Classes:** 102 flower categories
 - **Resolution:** 224×224
+
+**For other users:** If you don't have access to the shared dataset, download your own copy:
+```bash
+python download_oxford_flowers.py --data_dir ~/scratch/datasets/oxford_flowers
+export DATASET_PATH=~/scratch/datasets/oxford_flowers
+```
 
 ## Output Location
 
@@ -19,9 +25,14 @@ See [SETUP.md](SETUP.md) for environment setup and checkpoint download.
 
 ## Quick Start
 
+**Note:** If using your own dataset copy, set `DATASET_PATH` first:
+```bash
+export DATASET_PATH=~/scratch/datasets/oxford_flowers
+```
+
 Non-interactive (for automated runs):
 ```bash
-NON_INTERACTIVE=1 ./run_full_training_workflow.sh prod_500 250 100 64 03:00:00
+./run_full_training_workflow.sh prod_500 250 100 64 03:00:00
 ```
 
 Or interactive (prompts for each step):

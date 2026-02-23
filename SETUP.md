@@ -32,6 +32,31 @@ Or download from: https://github.com/mit-han-lab/once-for-all/releases/download/
 
 Place the checkpoint file at: `checkpoints/ofa_mbv3_d234_e346_k357_w1.0`
 
+## Download Dataset
+
+### Option 1: Use Shared Dataset (if accessible)
+
+The dataset is available at `/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers`
+
+Test access:
+```bash
+ls /storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers/train
+```
+
+If you see "Permission denied", use Option 2.
+
+### Option 2: Download Your Own Copy
+
+```bash
+python download_oxford_flowers.py --data_dir ~/scratch/datasets/oxford_flowers
+```
+
+Then set the environment variable when running workflows:
+```bash
+export DATASET_PATH=~/scratch/datasets/oxford_flowers
+./run_full_training_workflow.sh corpus_name 250 100 64 03:00:00
+```
+
 ## Verify
 
 ```bash

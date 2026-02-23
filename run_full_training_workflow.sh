@@ -18,7 +18,7 @@ WORKFLOW_LOG="$WORKFLOW_LOG_DIR/workflow_$(date +%Y%m%d_%H%M%S).log"
 exec 1> >(tee -a "$WORKFLOW_LOG")
 exec 2>&1
 
-DATASET_PATH="/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers"
+DATASET_PATH="${DATASET_PATH:-/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers}"
 NUM_CLASSES=102
 
 echo "========================================="

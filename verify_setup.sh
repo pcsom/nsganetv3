@@ -1,5 +1,4 @@
 #!/bin/bash
-# Verification script for NSGANetV2 training setup
 
 echo "=== NSGANetV2 Training Setup Verification ==="
 echo ""
@@ -45,14 +44,22 @@ $PYTHON_PATH -c "from ofa.utils import cross_entropy_loss_with_soft_target; prin
 # Check dataset
 echo ""
 echo "5. Checking Oxford Flowers dataset..."
-DATA_DIR="/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers"
+DATA_DIR="${DATASET_PATH:-/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers}"
 if [ -d "$DATA_DIR/train" ] && [ -d "$DATA_DIR/val" ]; then
-    TRAIN_COUNT=$(find $DATA_DIR/train -name "*.jpg" | wc -l)
-    VAL_COUNT=$(find $DATA_DIR/val -name "*.jpg" | wc -l)
-    echo "   ✓ Dataset found: $TRAIN_COUNT train, $VAL_COUNT val images"
+    TRAIN_COUNT=$(find $DATA_DIR/train -name "*.jpg" 2>/dev/null | wc -l)
+    VAL_COUNT=$(find $DATA_DIR/val -name "*.jpg" 2>/dev/null | wc -l)
+    echo "   ✓ Dataset found at: $DATA_DIR"
+    echo "     Train: $TRAIN_COUNT images, Val: $VAL_COUNT images"
 else
     echo "   ✗ Dataset not found at $DATA_DIR"
-    echo "   Run: python download_oxford_flowers.py"
+    echo ""
+    echo "   Option 1: Try accessing shared dataset"
+    echo "     ls /storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers/train"
+    echo ""
+    echo "   Option 2: Download your own copy"
+    echo "     python download_oxford_flowers.py --data_dir ~/scratch/datasets/oxford_flowers"
+    echo "     export DATASET_PATH=~/scratch/datasets/oxford_flowers"
+    echo "     bash verify_setup.sh  # Run again to verify"
     exit 1
 fi
 
