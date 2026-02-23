@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-# Non-interactive mode flag
 NON_INTERACTIVE="${NON_INTERACTIVE:-0}"
 
 CORPUS_NAME="${1:-corpus_nsganet_$(date +%Y%m%d_%H%M%S)}"
@@ -13,11 +12,9 @@ OUTPUT_ROOT="${OUTPUT_ROOT:-/storage/ice-shared/vip-vvk/data/AOT/$USER/nsganetv2
 CORPUS_DIR="$OUTPUT_ROOT/$CORPUS_NAME"
 WORKFLOW_LOG_DIR="${OUTPUT_ROOT}/.logs"
 
-# Create log directory
 mkdir -p "$WORKFLOW_LOG_DIR"
 WORKFLOW_LOG="$WORKFLOW_LOG_DIR/workflow_$(date +%Y%m%d_%H%M%S).log"
 
-# Redirect all output if logging needed
 exec 1> >(tee -a "$WORKFLOW_LOG")
 exec 2>&1
 
@@ -82,7 +79,6 @@ fi
 echo "✓ Created SLURM job scripts"
 echo ""
 
-# Handle quick test prompt
 if [ "$NON_INTERACTIVE" = "1" ]; then
     RUN_TEST="y"
 else

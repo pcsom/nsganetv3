@@ -5,12 +5,8 @@ from pathlib import Path
 
 def create_train_job(arch_id, config_path, arch_dir, supernet_path, data_path, 
                      num_classes, epochs, batch_size, conda_env, time_limit='12:00:00'):
-    
-    # Get repo path for absolute reference
     repo_path = os.path.dirname(os.path.abspath(__file__))
     train_script = os.path.join(repo_path, 'train_imagenet.py')
-    
-    # Convert relative supernet path to absolute if needed
     if not supernet_path.startswith('/'):
         supernet_path = os.path.join(repo_path, supernet_path)
     
