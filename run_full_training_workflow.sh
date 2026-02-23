@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Non-interactive mode flag
+NON_INTERACTIVE="${NON_INTERACTIVE:-0}"
+
 CORPUS_NAME="${1:-corpus_nsganet_$(date +%Y%m%d_%H%M%S)}"
 NUM_SAMPLES="${2:-250}"
 EPOCHS="${3:-100}"
@@ -8,6 +11,15 @@ BATCH_SIZE="${4:-64}"
 TIME_LIMIT="${5:-03:00:00}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-/storage/ice-shared/vip-vvk/data/AOT/$USER/nsganetv2}"
 CORPUS_DIR="$OUTPUT_ROOT/$CORPUS_NAME"
+WORKFLOW_LOG_DIR="${OUTPUT_ROOT}/.logs"
+
+# Create log directory
+mkdir -p "$WORKFLOW_LOG_DIR"
+WORKFLOW_LOG="$WORKFLOW_LOG_DIR/workflow_$(date +%Y%m%d_%H%M%S).log"
+
+# Redirect all output if logging needed
+exec 1> >(tee -a "$WORKFLOW_LOG")
+exec 2>&1
 
 DATASET_PATH="/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers"
 NUM_CLASSES=102
@@ -70,8 +82,13 @@ fi
 echo "✓ Created SLURM job scripts"
 echo ""
 
-read -p "[3/6] Run quick test before submitting all jobs? (y/n, default: y): " RUN_TEST
-RUN_TEST=${RUN_TEST:-y}
+# Handle quick test prompt
+if [ "$NON_INTERACTIVE" = "1" ]; then
+    RUN_TEST="y"
+else
+    read -p "[3/6] Run quick test before submitting all jobs? (y/n, default: y): " RUN_TEST
+    RUN_TEST=${RUN_TEST:-y}
+fi
 
 if [[ "$RUN_TEST" =~ ^[Yy]$ ]]; then
     echo "Submitting quick test (2 epochs)..."
@@ -89,17 +106,25 @@ if [[ "$RUN_TEST" =~ ^[Yy]$ ]]; then
         echo "✓ Test completed successfully! Best accuracy: $BEST_ACC%"
     else
         echo "⚠ Test may have failed. Check $CORPUS_DIR/quick_test.err for details."
-        read -p "Continue with full training anyway? (y/n): " CONTINUE
-        if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
-            echo "Aborting workflow"
-            exit 1
+        if [ "$NON_INTERACTIVE" != "1" ]; then
+            read -p "Continue with full training anyway? (y/n): " CONTINUE
+            if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
+                echo "Aborting workflow"
+                exit 1
+            fi
+        else
+            echo "Continuing anyway (non-interactive mode)..."
         fi
     fi
     echo ""
 fi
 
-read -p "[4/6] Submit all $TOTAL_ARCHS training jobs to SLURM? (y/n, default: y): " SUBMIT_JOBS
-SUBMIT_JOBS=${SUBMIT_JOBS:-y}
+if [ "$NON_INTERACTIVE" = "1" ]; then
+    SUBMIT_JOBS="y"
+else
+    read -p "[4/6] Submit all $TOTAL_ARCHS training jobs to SLURM? (y/n, default: y): " SUBMIT_JOBS
+    SUBMIT_JOBS=${SUBMIT_JOBS:-y}
+fi
 
 if [[ "$SUBMIT_JOBS" =~ ^[Yy]$ ]]; then
     echo "Submitting all training jobs..."
@@ -121,8 +146,12 @@ if [[ "$SUBMIT_JOBS" =~ ^[Yy]$ ]]; then
     echo "  - Watch live:    watch -n 60 'find $CORPUS_DIR -name status.json -exec grep -l success {} \\; | wc -l'"
     echo ""
     
-    read -p "Wait for all jobs to complete before collecting results? (y/n, default: n): " WAIT_JOBS
-    WAIT_JOBS=${WAIT_JOBS:-n}
+    if [ "$NON_INTERACTIVE" = "1" ]; then
+        WAIT_JOBS="n"
+    else
+        read -p "Wait for all jobs to complete before collecting results? (y/n, default: n): " WAIT_JOBS
+        WAIT_JOBS=${WAIT_JOBS:-n}
+    fi
     
     if [[ "$WAIT_JOBS" =~ ^[Yy]$ ]]; then
         echo "Waiting for all jobs to complete..."
