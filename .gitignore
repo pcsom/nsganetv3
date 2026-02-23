@@ -6,9 +6,11 @@ __pycache__/
 .idea
 ipynb/
 .torch/
+.nfs*
 *.log
 *.err
 quick_test_output/
+/checkpoints/
 checkpoints/
 20*/
 test_corpus_*/
