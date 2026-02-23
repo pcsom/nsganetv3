@@ -5,28 +5,35 @@ import pandas as pd
 import argparse
 from pathlib import Path
 
-def parse_train_log(log_path):
-    if not os.path.exists(log_path):
+def parse_train_results(arch_dir):
+    """Extract metrics from summary.csv in training directory."""
+    results = {}
+    
+    # Find summary.csv in the train subdirectory
+    train_dir = os.path.join(arch_dir, 'train')
+    if not os.path.isdir(train_dir):
         return None
     
-    with open(log_path, 'r') as f:
-        log_content = f.read()
-    
-    best_acc_match = re.search(r'best.*acc[uracy]*[:\s]+([0-9.]+)', log_content, re.IGNORECASE)
-    final_acc_match = re.search(r'final.*acc[uracy]*[:\s]+([0-9.]+)', log_content, re.IGNORECASE)
-    
-    params_match = re.search(r'#params\s+([0-9.]+)M', log_content)
-    flops_match = re.search(r'#flops\s+([0-9.]+)M', log_content)
-    
-    results = {}
-    if best_acc_match:
-        results['best_accuracy'] = float(best_acc_match.group(1))
-    if final_acc_match:
-        results['final_accuracy'] = float(final_acc_match.group(1))
-    if params_match:
-        results['params_M'] = float(params_match.group(1))
-    if flops_match:
-        results['flops_M'] = float(flops_match.group(1))
+    for subdir in os.listdir(train_dir):
+        summary_path = os.path.join(train_dir, subdir, 'summary.csv')
+        if os.path.exists(summary_path):
+            try:
+                df_summary = pd.read_csv(summary_path)
+                # Get the last row (final epoch)
+                if len(df_summary) > 0:
+                    last_row = df_summary.iloc[-1]
+                    if 'eval_top1' in df_summary.columns:
+                        results['final_top1'] = float(last_row['eval_top1'])
+                    if 'eval_top5' in df_summary.columns:
+                        results['final_top5'] = float(last_row['eval_top5'])
+                    if 'eval_top1' in df_summary.columns:
+                        results['best_top1'] = float(df_summary['eval_top1'].max())
+                    if 'eval_top5' in df_summary.columns:
+                        results['best_top5'] = float(df_summary['eval_top5'].max())
+                break
+            except Exception as e:
+                print(f"Warning: Could not parse {summary_path}: {e}")
+                continue
     
     return results if results else None
 
@@ -68,7 +75,7 @@ def collect_results(corpus_dir):
             
             if status['status'] == 'success':
                 completed += 1
-                train_results = parse_train_log(log_path)
+                train_results = parse_train_results(arch_dir)
                 if train_results:
                     result_entry.update(train_results)
             else:
@@ -90,12 +97,16 @@ def collect_results(corpus_dir):
     
     if completed > 0:
         completed_df = df[df['status'] == 'success']
-        if 'best_accuracy' in completed_df.columns:
-            print(f"\nAccuracy Statistics:")
-            print(f"  Mean: {completed_df['best_accuracy'].mean():.2f}%")
-            print(f"  Std: {completed_df['best_accuracy'].std():.2f}%")
-            print(f"  Min: {completed_df['best_accuracy'].min():.2f}%")
-            print(f"  Max: {completed_df['best_accuracy'].max():.2f}%")
+        if 'final_top1' in completed_df.columns:
+            print(f"\nAccuracy Statistics (Final Top-1):")
+            print(f"  Mean: {completed_df['final_top1'].mean():.2f}%")
+            print(f"  Std: {completed_df['final_top1'].std():.2f}%")
+            print(f"  Min: {completed_df['final_top1'].min():.2f}%")
+            print(f"  Max: {completed_df['final_top1'].max():.2f}%")
+        if 'best_top1' in completed_df.columns:
+            print(f"\nAccuracy Statistics (Best Top-1):")
+            print(f"  Mean: {completed_df['best_top1'].mean():.2f}%")
+            print(f"  Max: {completed_df['best_top1'].max():.2f}%")
     
     return df
 

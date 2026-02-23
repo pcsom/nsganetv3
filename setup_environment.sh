@@ -16,7 +16,7 @@ pip install torch==2.5.1 torchvision --index-url https://download.pytorch.org/wh
 
 echo "Installing core dependencies"
 pip install timm==0.6.13
-pip install torchprofile gdown scipy
+pip install torchprofile gdown scipy pandas
 pip install pymoo==0.6.1.5
 
 echo "Installing OFA (Once-For-All)"

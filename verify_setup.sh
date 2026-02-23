@@ -20,6 +20,7 @@ echo "2. Checking dependencies..."
 $PYTHON_PATH -c "import torch; print(f'   ✓ PyTorch {torch.__version__}')" || exit 1
 $PYTHON_PATH -c "import timm; print(f'   ✓ timm {timm.__version__}')" || exit 1
 $PYTHON_PATH -c "import pymoo; print(f'   ✓ pymoo {pymoo.__version__}')" || exit 1
+$PYTHON_PATH -c "import pandas; print(f'   ✓ pandas {pandas.__version__}')" || exit 1
 $PYTHON_PATH -c "from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3; print('   ✓ OFA installed')" || exit 1
 
 # Check timm version
