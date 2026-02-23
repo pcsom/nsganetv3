@@ -58,12 +58,13 @@ fi
 # Check OFA checkpoint
 echo ""
 echo "6. Checking OFA checkpoint..."
-CHECKPOINT="/storage/ice-shared/vip-vvk/data/AOT/ofa_checkpoints/ofa_mbv3_d234_e346_k357_w1.0"
+CHECKPOINT="checkpoints/ofa_mbv3_d234_e346_k357_w1.0"
 if [ -f "$CHECKPOINT" ]; then
     SIZE=$(du -h "$CHECKPOINT" | cut -f1)
     echo "   ✓ Checkpoint found: $SIZE"
 else
     echo "   ✗ Checkpoint not found at $CHECKPOINT"
+    echo "   Download with: cd checkpoints && gdown 1qmq7vWW6QkOPHfqXNnVvYQCFCQ2P6PUP && cd .."
     exit 1
 fi
 

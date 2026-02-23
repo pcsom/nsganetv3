@@ -15,17 +15,30 @@ Train NSGANetV2 architectures on Oxford Flowers-102 to generate ground truth acc
 
 ## Setup
 
-See [SETUP.md](SETUP.md).
+See [SETUP.md](SETUP.md) for environment setup and checkpoint download.
 
 ## Quick Start
 
+Non-interactive (for automated runs):
+```bash
+NON_INTERACTIVE=1 ./run_full_training_workflow.sh prod_500 250 100 64 03:00:00
+```
+
+Or interactive (prompts for each step):
 ```bash
 ./run_full_training_workflow.sh corpus_name num_archs epochs batch_size time_limit
 ```
 
+Parameters:
+- `corpus_name`: Name of the architecture corpus (e.g., `prod_500`)
+- `num_archs`: Number of base architectures to sample (250 will create 500 total with 2 resolutions)
+- `epochs`: Training epochs per architecture (100 typical)
+- `batch_size`: Batch size (64 recommended for RTX 6000)
+- `time_limit`: SLURM time limit per job (e.g., `03:00:00` for 3 hours)
+
 Example (500 architectures, 100 epochs):
 ```bash
-./run_full_training_workflow.sh prod_500 250 100 64 03:00:00
+NON_INTERACTIVE=1 ./run_full_training_workflow.sh prod_500 250 100 64 03:00:00
 ```
 
 ## Manual Steps (Optional)
