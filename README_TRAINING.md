@@ -1,153 +1,48 @@
-# NSGANetV2 Training for LLM Comparison
+# NSGANetV2 Training
 
-Train NSGANetV2 architectures on Oxford Flowers-102 to generate ground truth accuracy scores for comparing LLM-based NAS predictors.
-
-## Overview
-
-This workflow trains a corpus of NSGANetV2 neural architectures to compare the performance of different LLM-based performance predictors (CodeLlama vs ModernBERT). Unlike NASBench-201 which has pre-computed accuracy scores, NSGANetV2 is a non-benchmark search space requiring actual training to obtain ground truth performance metrics.
+Train NSGANetV2 architectures on Oxford Flowers-102 to generate ground truth accuracy scores.
 
 ## Dataset
 
-**Oxford Flowers-102 (VIP Shared Storage)**
-- **Location:** `/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers/` (764 MB)
-- **Storage Type:** VIP shared storage (accessible to all authorized VIP users)
-- **Images:** 2,040 total (1,020 training, 1,020 validation)
+- **Location:** `/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers/`
 - **Classes:** 102 flower categories
-- **Resolution:** 224×224 (compatible with NSGANetV2)
-- **Download:** `python download_oxford_flowers.py`
+- **Resolution:** 224×224
 
-**Why VIP Shared Storage?**
-- Shared across all VIP users (no need to duplicate dataset)
-- Persistent and backed up (not deleted like scratch storage)
-- Fast access from compute nodes
-- Follows existing project pattern used in coder-nas
+## Setup
 
-**Storage Organization:**
-```
-/storage/ice-shared/vip-vvk/data/AOT/
-├── shared/                        # Shared resources (datasets, common files)
-│   └── datasets/
-│       └── oxford_flowers/       # Dataset used by all users
-│           ├── train/            # 102 class folders
-│           ├── val/              # 102 class folders
-│           └── ...
-├── ${USER}/                      # User-specific directories (e.g., glu49/)
-│   ├── nsganetv2/               # NSGANetV2 training outputs
-│   │   └── corpus_250/          # Training results
-│   ├── codenas/                 # CodeNAS outputs
-│   └── ...
-└── psomu3/                       # Other users (abb32, athakkar37, etc.)
-    └── ...
-```
+See [SETUP.md](SETUP.md) for environment configuration.
 
-Dataset structure:
-```
-/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers/
-├── train/          # 102 class folders (class_001 to class_102)
-├── val/            # 102 class folders (class_001 to class_102)
-├── jpg/            # Original images
-└── 102flowers.tgz  # Original archive
-```
-
-## Environment Setup
-
-Install dependencies (only needed once):
+## Quick Start
 
 ```bash
-conda create -n nsganetv2-llm python=3.10
-conda activate nsganetv2-llm
-pip install torch==2.5.1 torchvision --index-url https://download.pytorch.org/whl/cu121
-pip install timm==0.6.13 pymoo==0.6.1.5 torchprofile gdown scipy
-git clone https://github.com/mit-han-lab/once-for-all.git
-cd once-for-all && pip install -e .
+./run_full_training_workflow.sh corpus_name num_archs epochs batch_size time_limit
 ```
 
-**Critical:** Must use `timm==0.6.13` (newer versions break compatibility).
-
-Download dataset:
+Example (500 architectures, 100 epochs):
 ```bash
-cd ~/nsganetv3
-python download_oxford_flowers.py
-# Downloads to /storage/ice1/4/7/glu49/datasets/oxford_flowers/ by default
-# Custom path: python download_oxford_flowers.py --data_dir /custom/path
+./run_full_training_workflow.sh prod_500 250 100 64 03:00:00
 ```
 
-Verify setup:
+## Manual Steps
+
+### 1. Generate Corpus
 ```bash
-bash verify_setup.sh
+python generate_simple_corpus.py --output_dir corpus_name --n_samples 250
 ```
 
-## Training Workflow
-
-### 1. Generate Architecture Corpus
-
-Create random NSGANetV2 architecture configurations:
-
+### 2. Create Jobs
 ```bash
-python generate_simple_corpus.py --output_dir corpus_250 --n_samples 250
+python create_imagenet_training_jobs.py --corpus_dir corpus_name
 ```
 
-This generates 500 total architectures (250 base configs × 2 resolutions: 192, 224).
-
-Output structure:
-```
-corpus_250/
-├── arch_0000/
-│   ├── config.json      # {ks: [...], e: [...], d: [...], r: 224}
-│   └── train_job.sh     # SLURM training script
-├── arch_0001/
-│   └── ...
-└── corpus_metadata.json # Corpus summary
-```
-
-### 2. Create Training Jobs
-
-Generate SLURM training scripts for all architectures:
-
+### 3. Submit
 ```bash
-python create_imagenet_training_jobs.py \
-  --corpus_dir corpus_250 \
-  --data_path /storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers \
-  --num_classes 102 \
-  --epochs 100 \
-  --batch_size 64 \
-  --time_limit 03:00:00
+bash corpus_name/submit_all_jobs.sh
 ```
 
-This creates individual SLURM job scripts for each architecture and a master submission script.
-
-### 3. Test Single Architecture (Recommended)
-
-Before submitting all jobs, test one architecture with 2 epochs:
-
+### 4. Collect Results
 ```bash
-sbatch quick_test.sh
-```
-
-Check results:
-```bash
-tail quick_test.err   # Training progress
-squeue -u $USER       # Job status
-```
-
-Expected: Accuracy improves from ~1% to ~3% over 2 epochs.
-
-### 4. Submit Training Jobs
-
-Submit all architectures for training:
-
-```bash
-cd ~/nsganetv3
-bash corpus_250/submit_all_jobs.sh
-```
-
-This submits 500 jobs to the SLURM queue. Jobs will run in batches based on available GPU resources.
-
-### 5. Monitor Progress
-
-Check queue status:
-```bash
-squeue -u $USER
+python collect_training_results.py --corpus_dir corpus_name --output_csv results.csv
 ```
 
 Count running jobs:

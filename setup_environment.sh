@@ -12,13 +12,12 @@ echo "Activating environment"
 source activate $ENV_NAME
 
 echo "Installing PyTorch with CUDA support"
-conda install pytorch torchvision pytorch-cuda=12.1 -c pytorch -c nvidia -y
+pip install torch==2.5.1 torchvision --index-url https://download.pytorch.org/whl/cu121
 
 echo "Installing core dependencies"
-pip install timm==0.9.16
-pip install torchprofile
+pip install timm==0.6.13
+pip install torchprofile gdown scipy
 pip install pymoo==0.6.1.5
-pip install numpy pandas pyyaml scipy scikit-learn
 
 echo "Installing OFA (Once-For-All)"
 pip install git+https://github.com/mit-han-lab/once-for-all.git
