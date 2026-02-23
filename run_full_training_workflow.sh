@@ -36,7 +36,16 @@ echo ""
 
 if [ ! -d "$DATASET_PATH/train" ]; then
     echo "ERROR: Dataset not found at $DATASET_PATH"
-    echo "Please run: python download_oxford_flowers.py"
+    echo ""
+    echo "To fix this:"
+    echo "  1. Download the dataset:"
+    echo "     python download_oxford_flowers.py --data_dir ~/scratch/datasets/oxford_flowers"
+    echo ""
+    echo "  2. Set the dataset path and run again:"
+    echo "     export DATASET_PATH=~/scratch/datasets/oxford_flowers"
+    echo "     ./run_full_training_workflow.sh $CORPUS_NAME $NUM_SAMPLES $EPOCHS $BATCH_SIZE $TIME_LIMIT"
+    echo ""
+    echo "See SETUP.md for more details."
     exit 1
 fi
 
