@@ -20,6 +20,7 @@ $PYTHON_PATH -c "import torch; print(f'   ✓ PyTorch {torch.__version__}')" || 
 $PYTHON_PATH -c "import timm; print(f'   ✓ timm {timm.__version__}')" || exit 1
 $PYTHON_PATH -c "import pymoo; print(f'   ✓ pymoo {pymoo.__version__}')" || exit 1
 $PYTHON_PATH -c "import pandas; print(f'   ✓ pandas {pandas.__version__}')" || exit 1
+$PYTHON_PATH -c "import yaml; print('   ✓ pyyaml installed')" || exit 1
 $PYTHON_PATH -c "from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3; print('   ✓ OFA installed')" || exit 1
 
 # Check timm version
@@ -72,7 +73,13 @@ if [ -f "$CHECKPOINT" ]; then
     echo "   ✓ Checkpoint found: $SIZE"
 else
     echo "   ✗ Checkpoint not found at $CHECKPOINT"
-    echo "   Download with: cd checkpoints && gdown 1qmq7vWW6QkOPHfqXNnVvYQCFCQ2P6PUP && cd .."
+    echo ""
+    echo "   Option 1: Copy from shared location"
+    echo "     mkdir -p checkpoints"
+    echo "     cp /storage/ice-shared/vip-vvk/data/AOT/shared/checkpoints/ofa_mbv3_d234_e346_k357_w1.0 checkpoints/"
+    echo ""
+    echo "   Option 2: Download (if shared copy not accessible)"
+    echo "     cd checkpoints && gdown 1qmq7vWW6QkOPHfqXNnVvYQCFCQ2P6PUP && cd .."
     exit 1
 fi
 
