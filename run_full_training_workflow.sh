@@ -145,10 +145,9 @@ if [[ "$SUBMIT_JOBS" =~ ^[Yy]$ ]]; then
     
     echo "[5/6] Monitoring training progress..."
     echo "You can monitor progress with:"
-    echo "  - Job queue:     squeue -u \$USER"
-    echo "  - Running count: squeue -u \$USER | grep 'RUNNING' | wc -l"
-    echo "  - Completed:     find $CORPUS_DIR -name 'status.json' -exec grep -l 'success' {} \\; | wc -l"
-    echo "  - Watch live:    watch -n 60 'find $CORPUS_DIR -name status.json -exec grep -l success {} \\; | wc -l'"
+    echo "  - Live dashboard: watch -n 30 ./monitor_training.sh $CORPUS_DIR"
+    echo "  - Job queue:      squeue -u \$USER"
+    echo "  - One-time check: ./monitor_training.sh $CORPUS_DIR"
     echo ""
     
     if [ "$NON_INTERACTIVE" = "1" ]; then
