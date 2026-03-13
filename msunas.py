@@ -8,11 +8,15 @@ from utils import get_correlation
 from evaluator import OFAEvaluator, get_net_info
 
 from pymoo.optimize import minimize
-from pymoo.model.problem import Problem
-from pymoo.factory import get_performance_indicator
-from pymoo.algorithms.so_genetic_algorithm import GA
+from pymoo.core.problem import Problem
+# from pymoo.factory import get_performance_indicator
+from pymoo.indicators.hv import Hypervolume
+# from pymoo.algorithms.so_genetic_algorithm import GA
+from pymoo.algorithms.soo.nonconvex.ga import GA
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
-from pymoo.factory import get_algorithm, get_crossover, get_mutation
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.operators.crossover.pntx import TwoPointCrossover
+from pymoo.operators.mutation.pm import PolynomialMutation
 
 from search_space.ofa import OFASearchSpace
 from acc_predictor.factory import get_acc_predictor
@@ -197,11 +201,18 @@ class MSuNAS:
             {'n_classes': self.n_classes, 'model_path': self.supernet_path})
 
         # initiate a multi-objective solver to optimize the problem
-        method = get_algorithm(
-            "nsga2", pop_size=40, sampling=nd_X,  # initialize with current nd archs
-            crossover=get_crossover("int_two_point", prob=0.9),
-            mutation=get_mutation("int_pm", eta=1.0),
-            eliminate_duplicates=True)
+        # method = get_algorithm(
+        #     "nsga2", pop_size=40, sampling=nd_X,  # initialize with current nd archs
+        #     crossover=get_crossover("int_two_point", prob=0.9),
+        #     mutation=get_mutation("int_pm", eta=1.0),
+        #     eliminate_duplicates=True)
+        method = NSGA2(
+            pop_size=40,
+            sampling=nd_X,
+            crossover=TwoPointCrossover(prob=0.9),
+            mutation=PolynomialMutation(eta=1.0),
+            eliminate_duplicates=True
+        )
 
         # kick-off the search
         res = minimize(
@@ -241,7 +252,7 @@ class MSuNAS:
         front = NonDominatedSorting().do(F, only_non_dominated_front=True)
         nd_F = F[front, :]
         ref_point = 1.01 * ref_pt
-        hv = get_performance_indicator("hv", ref_point=ref_point).calc(nd_F)
+        hv = Hypervolume(ref_point=ref_point).do(nd_F)
         if normalized:
             hv = hv / np.prod(ref_point)
         return hv

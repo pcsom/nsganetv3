@@ -16,7 +16,7 @@ predictor = "as"
 # Dataset name (imagenet/cifar10/cifar100/etc)
 dataset = "imagenet"
 # Number of classes in the dataset
-n_classes = 1000
+n_classes = 102
 # Number of training epochs for architectures
 n_epochs = 5
 # Validation set size (randomly sampled from training set)
@@ -54,7 +54,7 @@ memory = "24GB"
 # Job time limit for evaluation
 job_time = "08:00:00"
 # Conda environment name
-env_name = "nas"
+env_name = "nsganetv2-llm"
 # Allowed GPU types
 gpu_types = ["V100-16GB", "V100-32GB", "L40S", "A100-40GB", "H100", "A40", "H200"]
 

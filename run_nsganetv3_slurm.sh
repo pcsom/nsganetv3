@@ -3,9 +3,9 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8GB
-#SBATCH --time=48:00:00
-#SBATCH --output="/storage/ice-shared/vip-vvk/data/AOT/%u/evolution_logs/nsganet.%A.%a.log"
-#SBATCH --error="/storage/ice-shared/vip-vvk/data/AOT/%u/evolution_logs/nsganet_error.%A.%a.log"
+#SBATCH --time=12:00:00
+#SBATCH --output="./slurm_logs/nsganet.%A.%a.log"
+#SBATCH --error="./slurm_logs/nsganet_error.%A.%a.log"
 
 # Parse command line arguments
 save_dir=""
@@ -15,7 +15,7 @@ supernet_path=""
 sec_obj="flops"
 iterations=30
 predictor="rbf"
-conda_environment="nas"
+conda_environment="nsganetv2-llm"
 config_file=""
 
 while getopts ":s:d:p:n:o:i:r:e:c:" opt; do
@@ -51,7 +51,7 @@ if [[ -z "$save_dir" || -z "$data_path" || -z "$supernet_path" ]]; then
     echo "Required: -s (save directory), -p (data path), -n (supernet path)"
     echo "Optional: -d (dataset, default: imagenet), -o (secondary objective, default: flops)"
     echo "          -i (iterations, default: 30), -r (predictor, default: rbf)"
-    echo "          -e (conda env, default: nas), -c (config file)"
+    echo "          -e (conda env, default: nsganetv2-llm), -c (config file)"
     exit 1
 fi
 

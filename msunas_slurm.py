@@ -13,11 +13,14 @@ from utils import get_correlation
 from evaluator import OFAEvaluator, get_net_info
 
 from pymoo.optimize import minimize
-from pymoo.model.problem import Problem
-from pymoo.factory import get_performance_indicator
-from pymoo.algorithms.so_genetic_algorithm import GA
+from pymoo.core.problem import Problem
+# from pymoo.factory import get_performance_indicator
+# from pymoo.algorithms.so_genetic_algorithm import GA
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
-from pymoo.factory import get_algorithm, get_crossover, get_mutation
+# from pymoo.factory import get_algorithm, get_crossover, get_mutation
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.operators.crossover.pntx import TwoPointCrossover
+from pymoo.operators.mutation.pm import PolynomialMutation
 
 from search_space.ofa import OFASearchSpace
 from acc_predictor.factory import get_acc_predictor
@@ -33,7 +36,7 @@ NODES = 1
 CORES = 8
 MEM = '24GB'
 JOB_TIME = '08:00:00'
-ENV_NAME = 'nas'
+ENV_NAME = 'nsganetv2-llm'
 GPUS = ["V100-16GB", "V100-32GB", "L40S", "A100-40GB", "H100", "A40", "H200"]
 
 
@@ -98,7 +101,7 @@ class MSuNASSLURM(MSuNAS):
                 'cores': 8,
                 'memory': '24GB',
                 'job_time': '08:00:00',
-                'env_name': 'nas',
+                'env_name': 'nsganetv2-llm',
                 'gpu_types': ["V100-16GB", "V100-32GB", "L40S", "A100-40GB", "H100", "A40", "H200"]
             },
             'surrogate': {
@@ -178,7 +181,6 @@ class MSuNASSLURM(MSuNAS):
 #SBATCH --output={self.logs_dir}/iter_{iteration}/evaluation.%A.%a.log
 #SBATCH --error={self.logs_dir}/iter_{iteration}/evaluation_error.%A.%a.log
 #SBATCH --array=0-{num_jobs-1}
-#SBATCH --constraint="{'|'.join(self.config['slurm']['gpu_types'])}"
 
 module load anaconda3/2023.03
 module load cuda/12.1.1
@@ -235,23 +237,23 @@ conda run -n {self.config['slurm']['env_name']} --no-capture-output python -u ev
         
         return top1_err, complexity
     
-    def _evaluate(self, archs, it):
-        """SLURM-based evaluation of architectures"""
-        print(f"Evaluating {len(archs)} architectures for iteration {it}")
+    # def _evaluate(self, archs, it):
+    #     """SLURM-based evaluation of architectures"""
+    #     print(f"Evaluating {len(archs)} architectures for iteration {it}")
         
-        # Create input CSV
-        eval_input_path = os.path.join(self.save_path, f'eval_input_iter_{it}.csv')
-        self._create_eval_input_csv(archs, eval_input_path, it)
+    #     # Create input CSV
+    #     eval_input_path = os.path.join(self.save_path, f'eval_input_iter_{it}.csv')
+    #     self._create_eval_input_csv(archs, eval_input_path, it)
         
-        # Create and submit SLURM job
-        job_file = self._create_job_file(len(archs), it)
-        job_id = self._submit_job(job_file)
+    #     # Create and submit SLURM job
+    #     job_file = self._create_job_file(len(archs), it)
+    #     job_id = self._submit_job(job_file)
         
-        # Wait for completion
-        self._wait_for_job_completion(job_id, f"{self.job_name}_{it}")
+    #     # Wait for completion
+    #     self._wait_for_job_completion(job_id, f"{self.job_name}_{it}")
         
-        # Parse results
-        return self._parse_evaluation_results(archs, it)
+    #     # Parse results
+    #     return self._parse_evaluation_results(archs, it)
     
     def _fit_acc_predictor(self, archive):
         """Fit accuracy predictor - simplified version without GPU training for now"""
@@ -275,13 +277,20 @@ conda run -n {self.config['slurm']['env_name']} --no-capture-output python -u ev
             {'n_classes': self.config['dataset']['n_classes'], 'model_path': self.supernet_path})
 
         # Initiate multi-objective solver with config values
-        method = get_algorithm(
-            "nsga2", 
+        # method = get_algorithm(
+        #     "nsga2", 
+        #     pop_size=self.config['evolutionary']['pop_size'], 
+        #     sampling=nd_X,
+        #     crossover=get_crossover("int_two_point", prob=self.config['evolutionary']['crossover_prob']),
+        #     mutation=get_mutation("int_pm", eta=self.config['evolutionary']['mutation_eta']),
+        #     eliminate_duplicates=True)
+        method = NSGA2(
             pop_size=self.config['evolutionary']['pop_size'], 
             sampling=nd_X,
-            crossover=get_crossover("int_two_point", prob=self.config['evolutionary']['crossover_prob']),
-            mutation=get_mutation("int_pm", eta=self.config['evolutionary']['mutation_eta']),
-            eliminate_duplicates=True)
+            crossover=TwoPointCrossover(prob=self.config['evolutionary']['crossover_prob']),
+            mutation=PolynomialMutation(eta=self.config['evolutionary']['mutation_eta']),
+            eliminate_duplicates=True
+        )
 
         # Run optimization
         res = minimize(
@@ -320,52 +329,51 @@ conda run -n {self.config['slurm']['env_name']} --no-capture-output python -u ev
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df.to_csv(filepath, index=False)
         
-    def _create_evaluation_job_file(self, num_archs, iteration):
-        """Create SLURM job file for architecture evaluation"""
-        log_dir = os.path.join(self.logs_dir, f'iteration_{iteration}')
-        os.makedirs(log_dir, exist_ok=True)
+#     def _create_evaluation_job_file(self, num_archs, iteration):
+#         """Create SLURM job file for architecture evaluation"""
+#         log_dir = os.path.join(self.logs_dir, f'iteration_{iteration}')
+#         os.makedirs(log_dir, exist_ok=True)
         
-        job_file_path = os.path.join(self.save_path, f'eval_iter_{iteration}.job')
-        eval_input_path = os.path.join(self.save_path, f'eval_input_iter_{iteration}.csv')
+#         job_file_path = os.path.join(self.save_path, f'eval_iter_{iteration}.job')
+#         eval_input_path = os.path.join(self.save_path, f'eval_input_iter_{iteration}.csv')
         
-        batch_script = f"""#!/bin/bash
-#SBATCH --job-name={self.job_name}_eval_{iteration}
-#SBATCH --nodes={NODES}
-#SBATCH -G 1
-#SBATCH --cpus-per-task={CORES}
-#SBATCH --mem={MEM}
-#SBATCH --time={JOB_TIME}
-#SBATCH --output={log_dir}/evaluation.%A.%a.log
-#SBATCH --error={log_dir}/evaluation_error.%A.%a.log
-#SBATCH --array=0-{num_archs-1}
-#SBATCH --constraint="{'|'.join(GPUS)}"
+#         batch_script = f"""#!/bin/bash
+# #SBATCH --job-name={self.job_name}_eval_{iteration}
+# #SBATCH --nodes={NODES}
+# #SBATCH -G 1
+# #SBATCH --cpus-per-task={CORES}
+# #SBATCH --mem={MEM}
+# #SBATCH --time={JOB_TIME}
+# #SBATCH --output={log_dir}/evaluation.%A.%a.log
+# #SBATCH --error={log_dir}/evaluation_error.%A.%a.log
+# #SBATCH --array=0-{num_archs-1}
 
-module load anaconda3/2023.03
-module load cuda/12.1.1
+# module load anaconda3/2023.03
+# module load cuda/12.1.1
 
-# Execute the evaluation script
-conda run -n {ENV_NAME} --no-capture-output python -u evaluator_slurm.py \\
-    $SLURM_ARRAY_TASK_ID \\
-    -i {eval_input_path} \\
-    -o {self.save_path} \\
-    --iteration {iteration} \\
-    --data {self.data} \\
-    --dataset {self.dataset} \\
-    --n_classes {self.n_classes} \\
-    --supernet_path {self.supernet_path} \\
-    --num_workers {self.n_workers} \\
-    --valid_size {self.vld_size} \\
-    --trn_batch_size {self.trn_batch_size} \\
-    --vld_batch_size {self.vld_batch_size} \\
-    --n_epochs {self.n_epochs} \\
-    --latency {self.latency} \\
-    --test {self.test}
-"""
+# # Execute the evaluation script
+# conda run -n {ENV_NAME} --no-capture-output python -u evaluator_slurm.py \\
+#     $SLURM_ARRAY_TASK_ID \\
+#     -i {eval_input_path} \\
+#     -o {self.save_path} \\
+#     --iteration {iteration} \\
+#     --data {self.data} \\
+#     --dataset {self.dataset} \\
+#     --n_classes {self.n_classes} \\
+#     --supernet_path {self.supernet_path} \\
+#     --num_workers {self.n_workers} \\
+#     --valid_size {self.vld_size} \\
+#     --trn_batch_size {self.trn_batch_size} \\
+#     --vld_batch_size {self.vld_batch_size} \\
+#     --n_epochs {self.n_epochs} \\
+#     --latency {self.latency} \\
+#     --test {self.test}
+# """
         
-        with open(job_file_path, 'w') as f:
-            f.write(batch_script)
+#         with open(job_file_path, 'w') as f:
+#             f.write(batch_script)
         
-        return job_file_path
+#         return job_file_path
 
     def _submit_job(self, job_file):
         """Submit SLURM job and return job ID"""
@@ -447,7 +455,6 @@ conda run -n {ENV_NAME} --no-capture-output python -u evaluator_slurm.py \\
 #SBATCH --time={self.config['surrogate']['train_job_time']}
 #SBATCH --output={log_dir}/surrogate_train.%j.log
 #SBATCH --error={log_dir}/surrogate_train_error.%j.log
-#SBATCH --constraint="{'|'.join(self.config['slurm']['gpu_types'])}"
 
 module load anaconda3/2023.03
 module load cuda/12.1.1
@@ -469,7 +476,7 @@ conda run -n {self.config['slurm']['env_name']} python -u {script_path} {iterati
         self._create_eval_input_csv(archs, eval_input_path, it)
         
         # Create and submit evaluation job
-        job_file = self._create_evaluation_job_file(len(archs), it)
+        job_file = self._create_job_file(len(archs), it)
         job_id = self._submit_job(job_file)
         
         # Wait for completion
@@ -549,11 +556,11 @@ if __name__ == '__main__':
                         help='latency measurement settings')
     
     # Legacy arguments for compatibility (will be deprecated)
-    parser.add_argument('--n_doe', type=int, default=None, help='initial sample size for DOE')
+    parser.add_argument('--n_doe', type=int, default=100, help='initial sample size for DOE')
     parser.add_argument('--n_iter', type=int, default=None, help='number of architectures per iteration')
     parser.add_argument('--n_gpus', type=int, default=None, help='total number of available gpus (deprecated)')
     parser.add_argument('--gpu', type=int, default=None, help='number of gpus per job (deprecated)')
-    parser.add_argument('--n_classes', type=int, default=None, help='number of classes')
+    parser.add_argument('--n_classes', type=int, default=1000, help='number of classes')
     parser.add_argument('--n_workers', type=int, default=None, help='number of workers for dataloader')
     parser.add_argument('--vld_size', type=int, default=None, help='validation set size')
     parser.add_argument('--trn_batch_size', type=int, default=None, help='train batch size')
