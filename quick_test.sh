@@ -13,10 +13,11 @@ module load cuda/12.1.1
 
 cd $SLURM_SUBMIT_DIR
 
-CORPUS_DIR="${CORPUS_DIR:-corpus_250}"
+CORPUS_DIR="${CORPUS_DIR:-oxford_corpus_250}"
 CONFIG_PATH="$CORPUS_DIR/arch_0000/config.json"
 OUTPUT_DIR="$CORPUS_DIR/quick_test_output"
 SUPERNET_PATH="${SUPERNET_PATH:-checkpoints/ofa_mbv3_d234_e346_k357_w1.0}"
+DATASET_PATH="${DATASET_PATH:-$HOME/scratch/datasets/oxford_flowers}"
 
 if [ ! -f "$CONFIG_PATH" ]; then
     echo "Config not found: $CONFIG_PATH"
@@ -25,7 +26,7 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 
-$HOME/.conda/envs/nsganetv2-llm/bin/python train_imagenet.py /storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers \
+$HOME/.conda/envs/nsganetv2-llm/bin/python train_imagenet.py "$DATASET_PATH" \
     --model nsganetv2 \
     --model-config "$CONFIG_PATH" \
     --initial-checkpoint "$SUPERNET_PATH" \
