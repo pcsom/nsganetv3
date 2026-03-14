@@ -18,6 +18,7 @@ test_corpus_*/
 setup_log.txt
 download_cifar.py
 test_imports.py
+once-for-all/
 
 # C extensions
 *.so
