@@ -2,6 +2,8 @@
 set -e
 
 NON_INTERACTIVE="${NON_INTERACTIVE:-0}"
+DRY_RUN="${DRY_RUN:-0}"
+CORPUS_SEED="${CORPUS_SEED:-0}"
 
 CORPUS_NAME="${1:-corpus_nsganet_$(date +%Y%m%d_%H%M%S)}"
 NUM_SAMPLES="${2:-250}"
@@ -19,6 +21,7 @@ exec 1> >(tee -a "$WORKFLOW_LOG")
 exec 2>&1
 
 DATASET_PATH="${DATASET_PATH:-/storage/ice-shared/vip-vvk/data/AOT/shared/datasets/oxford_flowers}"
+SUPERNET_PATH="${SUPERNET_PATH:-checkpoints/ofa_mbv3_d234_e346_k357_w1.0}"
 NUM_CLASSES=102
 
 echo "========================================="
@@ -31,8 +34,23 @@ echo "Batch size:     $BATCH_SIZE"
 echo "Time limit:     $TIME_LIMIT"
 echo "Dataset:        $DATASET_PATH"
 echo "Output dir:     $CORPUS_DIR"
+echo "Corpus seed:    $CORPUS_SEED"
+echo "Dry run:        $DRY_RUN"
 echo "========================================="
 echo ""
+
+if [ ! -f "$SUPERNET_PATH" ]; then
+    echo "ERROR: OFA checkpoint not found at $SUPERNET_PATH"
+    echo "See SETUP.md for options.."
+    exit 1
+fi
+
+for script in generate_simple_corpus.py create_imagenet_training_jobs.py quick_test.sh collect_training_results.py monitor_training.sh; do
+    if [ ! -e "$script" ]; then
+        echo "ERROR: Reqiured file missing: $script"
+        exit 1
+    fi
+done
 
 if [ ! -d "$DATASET_PATH/train" ]; then
     echo "ERROR: Dataset not found at $DATASET_PATH"
@@ -49,6 +67,13 @@ if [ ! -d "$DATASET_PATH/train" ]; then
     exit 1
 fi
 
+if [ "$DRY_RUN" = "1" ]; then
+    echo "Dry-run checks passed."
+    echo "No corpus/jobs were created and no SLURM jobs were submitted."
+    echo "Run with DRY_RUN=0 (default) to execute the full workflow."
+    exit 0
+fi
+
 if [ -d "$CORPUS_DIR" ]; then
     echo "ERROR: Corpus directory '$CORPUS_DIR' already exists"
     echo "Please use a different name or remove the existing directory"
@@ -60,7 +85,8 @@ mkdir -p "$OUTPUT_ROOT"
 echo "[1/6] Generating architecture corpus..."
 python generate_simple_corpus.py \
     --output_dir "$CORPUS_DIR" \
-    --n_samples "$NUM_SAMPLES"
+    --n_samples "$NUM_SAMPLES" \
+    --seed "$CORPUS_SEED"
 
 if [ ! -f "$CORPUS_DIR/corpus_metadata.json" ]; then
     echo "ERROR: Corpus generation failed"

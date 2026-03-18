@@ -3,17 +3,18 @@ import json
 import argparse
 import random
 
-def sample_random_architecture(resolutions=[192, 224]):
+def sample_random_architecture(resolutions=[192, 224], rng=None):
+    rng = random if rng is None else rng
     kernel_choices = [3, 5, 7]
     expansion_choices = [3, 4, 6]
     depth_choices = [2, 3, 4]
     
-    depths = [random.choice(depth_choices) for _ in range(5)]
+    depths = [rng.choice(depth_choices) for _ in range(5)]
     
     total_layers = sum(depths)
     
-    ks = [random.choice(kernel_choices) for _ in range(total_layers)]
-    e = [random.choice(expansion_choices) for _ in range(total_layers)]
+    ks = [rng.choice(kernel_choices) for _ in range(total_layers)]
+    e = [rng.choice(expansion_choices) for _ in range(total_layers)]
     
     architectures = []
     for r in resolutions:
@@ -26,15 +27,16 @@ def sample_random_architecture(resolutions=[192, 224]):
     
     return architectures
 
-def generate_simple_corpus(n_samples, output_dir, resolutions):
+def generate_simple_corpus(n_samples, output_dir, resolutions, seed=0):
     os.makedirs(output_dir, exist_ok=True)
+    rng = random.Random(seed)
     
     corpus = []
     
-    print(f"Generating {n_samples} random architectures...")
+    print(f"Generating {n_samples} random architectures (seed={seed})...")
     
     for i in range(n_samples):
-        archs = sample_random_architecture(resolutions)
+        archs = sample_random_architecture(resolutions, rng=rng)
         
         for arch_config in archs:
             arch_id = len(corpus)
@@ -58,6 +60,16 @@ def generate_simple_corpus(n_samples, output_dir, resolutions):
     corpus_meta_path = os.path.join(output_dir, 'corpus_metadata.json')
     with open(corpus_meta_path, 'w') as f:
         json.dump(corpus, f, indent=2)
+
+    manifest_path = os.path.join(output_dir, 'generation_manifest.json')
+    with open(manifest_path, 'w') as f:
+        json.dump({
+            'generator': 'generate_simple_corpus.py',
+            'seed': seed,
+            'n_samples': n_samples,
+            'resolutions': resolutions,
+            'total_configurations': len(corpus),
+        }, f, indent=2)
     
     print(f"\nCorpus generation complete:")
     print(f"  Base architectures: {n_samples}")
@@ -65,6 +77,7 @@ def generate_simple_corpus(n_samples, output_dir, resolutions):
     print(f"  Total configurations: {len(corpus)}")
     print(f"  Output directory: {output_dir}")
     print(f"  Metadata: {corpus_meta_path}")
+    print(f"  Manifest: {manifest_path}")
     
     return corpus
 
@@ -73,10 +86,12 @@ def main():
     parser.add_argument('--n_samples', type=int, default=250)
     parser.add_argument('--output_dir', type=str, default='training_corpus')
     parser.add_argument('--resolutions', type=int, nargs='+', default=[192, 224])
+    parser.add_argument('--seed', type=int, default=0,
+                        help='Random seed for deterministic corpus generation')
     
     args = parser.parse_args()
     
-    generate_simple_corpus(args.n_samples, args.output_dir, args.resolutions)
+    generate_simple_corpus(args.n_samples, args.output_dir, args.resolutions, seed=args.seed)
 
 if __name__ == '__main__':
     main()

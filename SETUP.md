@@ -37,8 +37,6 @@ gdown 1qmq7vWW6QkOPHfqXNnVvYQCFCQ2P6PUP
 cd ..
 ```
 
-Or manually download from: https://github.com/mit-han-lab/once-for-all/releases/download/v0.1-ckpts/ofa_mbv3_d234_e346_k357_w1.0
-
 The checkpoint file should be at: `checkpoints/ofa_mbv3_d234_e346_k357_w1.0`
 
 ## Download Dataset

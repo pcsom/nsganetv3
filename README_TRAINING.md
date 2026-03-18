@@ -35,6 +35,11 @@ Non-interactive (for automated runs):
 ./run_full_training_workflow.sh prod_500 250 100 64 03:00:00
 ```
 
+Preflight check only (no jobs submitted):
+```bash
+DRY_RUN=1 ./run_full_training_workflow.sh prod_500 250 100 64 03:00:00
+```
+
 Or interactive (prompts for each step):
 ```bash
 ./run_full_training_workflow.sh corpus_name num_archs epochs batch_size time_limit
@@ -52,11 +57,16 @@ Example (500 architectures, 100 epochs):
 NON_INTERACTIVE=1 ./run_full_training_workflow.sh prod_500 250 100 64 03:00:00
 ```
 
+For reproducible corpus generation across teammates, set a fixed seed:
+```bash
+CORPUS_SEED=42 NON_INTERACTIVE=1 ./run_full_training_workflow.sh prod_500 250 100 64 03:00:00
+```
+
 ## Manual Steps (Optional)
 
 ```bash
 # Generate corpus
-python generate_simple_corpus.py --output_dir /storage/ice-shared/vip-vvk/data/AOT/$USER/nsganetv2/corpus_name --n_samples 250
+python generate_simple_corpus.py --output_dir /storage/ice-shared/vip-vvk/data/AOT/$USER/nsganetv2/corpus_name --n_samples 250 --seed 42
 
 # Create jobs
 python create_imagenet_training_jobs.py --corpus_dir /storage/ice-shared/vip-vvk/data/AOT/$USER/nsganetv2/corpus_name
@@ -65,7 +75,7 @@ python create_imagenet_training_jobs.py --corpus_dir /storage/ice-shared/vip-vvk
 bash /storage/ice-shared/vip-vvk/data/AOT/$USER/nsganetv2/corpus_name/submit_all_jobs.sh
 
 # Collect results
-python collect_training_results.py --corpus_dir /storage/ice-shared/vip-vvk/data/AOT/$USER/nsganetv2/corpus_name --output_csv results.csv
+python collect_training_results.py --corpus_dir /storage/ice-shared/vip-vvk/data/AOT/$USER/nsganetv2/corpus_name --output_csv results.csv --surrogate_output surrogate_ready.csv
 ```
 
 ## Monitor

@@ -1,9 +1,7 @@
 import os
 import json
-import re
 import pandas as pd
 import argparse
-from pathlib import Path
 
 def parse_train_results(arch_dir):
     """Extract metrics from summary.csv in training directory."""
@@ -110,19 +108,38 @@ def collect_results(corpus_dir):
     
     return df
 
+
+def to_surrogate_dataframe(df):
+    surrogate_df = df.copy()
+    for column in ['ks', 'e', 'd']:
+        if column in surrogate_df.columns:
+            surrogate_df[column] = surrogate_df[column].apply(lambda value: json.dumps(value, separators=(',', ':')))
+    return surrogate_df
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--corpus_dir', type=str, default='training_corpus')
-    parser.add_argument('--output', type=str, default='training_results.csv')
+    parser.add_argument('--output', type=str, default='training_results.csv',
+                        help='Output CSV filename (relative to corpus_dir)')
+    parser.add_argument('--output_csv', type=str, default=None,
+                        help='Alias for --output (backward compatibility)')
+    parser.add_argument('--surrogate_output', type=str, default=None,
+                        help='Optional surrogate-ready CSV filename (relative to corpus_dir)')
     
     args = parser.parse_args()
     
     df = collect_results(args.corpus_dir)
     
     if df is not None:
-        output_path = os.path.join(args.corpus_dir, args.output)
+        output_name = args.output_csv if args.output_csv is not None else args.output
+        output_path = os.path.join(args.corpus_dir, output_name)
         df.to_csv(output_path, index=False)
         print(f"\nResults saved to: {output_path}")
+
+        if args.surrogate_output:
+            surrogate_path = os.path.join(args.corpus_dir, args.surrogate_output)
+            to_surrogate_dataframe(df).to_csv(surrogate_path, index=False)
+            print(f"Surrogate-ready export saved to: {surrogate_path}")
         
         print(f"\nTo use for LLM comparison:")
         print(f"  1. Copy to NASlib-coder-nas repo")
