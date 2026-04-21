@@ -27,6 +27,7 @@ class MSuNAS:
         self.search_space = OFASearchSpace()
         self.save_path = kwargs.pop('save', '.tmp')  # path to save results
         self.resume = kwargs.pop('resume', None)  # resume search from a checkpoint
+        self.offline_data = kwargs.pop('offline_data', None)  # offline ground truth data file to bypass OFAEvaluator
         self.sec_obj = kwargs.pop('sec_obj', 'flops')  # second objective to optimize simultaneously
         self.iterations = kwargs.pop('iterations', 30)  # number of iterations to run search
         self.n_doe = kwargs.pop('n_doe', 100)  # number of architectures to train before fit surrogate model
@@ -51,6 +52,13 @@ class MSuNAS:
 
         if self.resume:
             archive = self._resume_from_dir()
+        elif self.offline_data:
+            from offline_loader import load_offline_ground_truth
+            archive = load_offline_ground_truth(
+                self.offline_data, self.sec_obj, self.n_classes, self.supernet_path
+            )
+            # Make sure we don't start from an empty archive
+            assert len(archive) > 0, "Offline data loaded an empty archive."
         else:
             # the following lines corresponding to Algo 1 line 1-7 in the paper
             archive = []  # initialize an empty archive to store all trained CNNs

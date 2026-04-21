@@ -3,6 +3,7 @@ import json
 import pandas as pd
 import argparse
 
+
 def parse_train_results(arch_dir):
     """Extract metrics from summary.csv in training directory."""
     results = {}
@@ -116,6 +117,38 @@ def to_surrogate_dataframe(df):
             surrogate_df[column] = surrogate_df[column].apply(lambda value: json.dumps(value, separators=(',', ':')))
     return surrogate_df
 
+
+def write_embedding_manifest(df, output_path):
+    """Write a simple JSONL manifest for future embedding generation."""
+    records_written = 0
+
+    with open(output_path, 'w', encoding='utf-8') as handle:
+        for _, row in df.iterrows():
+            arch_id = row.get('arch_id')
+            ks = row.get('ks')
+            e = row.get('e')
+            d = row.get('d')
+            r = row.get('r')
+
+            architecture_text = f"ks={ks}; e={e}; d={d}; r={r}"
+            record = {
+                'arch_id': arch_id,
+                'architecture_text': architecture_text,
+                'arch_spec': {
+                    'ks': ks,
+                    'e': e,
+                    'd': d,
+                    'r': r,
+                },
+                'status': row.get('status'),
+                'best_top1': row.get('best_top1', None),
+                'final_top1': row.get('final_top1', None),
+            }
+            handle.write(json.dumps(record) + '\n')
+            records_written += 1
+
+    return records_written
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--corpus_dir', type=str, default='training_corpus')
@@ -125,6 +158,8 @@ def main():
                         help='Alias for --output (backward compatibility)')
     parser.add_argument('--surrogate_output', type=str, default=None,
                         help='Optional surrogate-ready CSV filename (relative to corpus_dir)')
+    parser.add_argument('--embedding_manifest', type=str, default=None,
+                        help='Optional JSONL filename for embedding-ready architecture records (relative to corpus_dir)')
     
     args = parser.parse_args()
     
@@ -140,6 +175,11 @@ def main():
             surrogate_path = os.path.join(args.corpus_dir, args.surrogate_output)
             to_surrogate_dataframe(df).to_csv(surrogate_path, index=False)
             print(f"Surrogate-ready export saved to: {surrogate_path}")
+
+        if args.embedding_manifest:
+            manifest_path = os.path.join(args.corpus_dir, args.embedding_manifest)
+            written = write_embedding_manifest(df, manifest_path)
+            print(f"Embedding manifest saved to: {manifest_path} ({written} records)")
         
         print(f"\nTo use for LLM comparison:")
         print(f"  1. Copy to NASlib-coder-nas repo")

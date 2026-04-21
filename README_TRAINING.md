@@ -62,6 +62,11 @@ For reproducible corpus generation across teammates, set a fixed seed:
 CORPUS_SEED=42 NON_INTERACTIVE=1 ./run_full_training_workflow.sh prod_500 250 100 64 03:00:00
 ```
 
+Small WIP step toward LLM comparison (also emit embedding-manifest JSONL):
+```bash
+GENERATE_EMBEDDING_MANIFEST=1 NON_INTERACTIVE=1 ./run_full_training_workflow.sh prod_500 250 100 64 03:00:00
+```
+
 ## Manual Steps (Optional)
 
 ```bash

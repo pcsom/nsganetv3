@@ -4,6 +4,7 @@ set -e
 NON_INTERACTIVE="${NON_INTERACTIVE:-0}"
 DRY_RUN="${DRY_RUN:-0}"
 CORPUS_SEED="${CORPUS_SEED:-0}"
+GENERATE_EMBEDDING_MANIFEST="${GENERATE_EMBEDDING_MANIFEST:-0}"
 
 CORPUS_NAME="${1:-corpus_nsganet_$(date +%Y%m%d_%H%M%S)}"
 NUM_SAMPLES="${2:-250}"
@@ -36,6 +37,7 @@ echo "Dataset:        $DATASET_PATH"
 echo "Output dir:     $CORPUS_DIR"
 echo "Corpus seed:    $CORPUS_SEED"
 echo "Dry run:        $DRY_RUN"
+echo "Embed manifest: $GENERATE_EMBEDDING_MANIFEST"
 echo "========================================="
 echo ""
 
@@ -218,15 +220,26 @@ fi
 echo ""
 echo "[6/6] Collecting training results..."
 OUTPUT_CSV="$CORPUS_DIR/${CORPUS_NAME}_results.csv"
+EMBEDDING_MANIFEST_NAME="${CORPUS_NAME}_embedding_manifest.jsonl"
 
-python collect_training_results.py \
-    --corpus_dir "$CORPUS_DIR" \
+COLLECT_ARGS=(
+    --corpus_dir "$CORPUS_DIR"
     --output_csv "$OUTPUT_CSV"
+)
+
+if [ "$GENERATE_EMBEDDING_MANIFEST" = "1" ]; then
+    COLLECT_ARGS+=(--embedding_manifest "$EMBEDDING_MANIFEST_NAME")
+fi
+
+python collect_training_results.py "${COLLECT_ARGS[@]}"
 
 if [ -f "$OUTPUT_CSV" ]; then
     NUM_RESULTS=$(tail -n +2 "$OUTPUT_CSV" | wc -l)
     echo "✓ Results collected: $NUM_RESULTS architectures"
     echo "✓ Output saved to: $OUTPUT_CSV"
+    if [ "$GENERATE_EMBEDDING_MANIFEST" = "1" ] && [ -f "$CORPUS_DIR/$EMBEDDING_MANIFEST_NAME" ]; then
+        echo "✓ Embedding manifest: $CORPUS_DIR/$EMBEDDING_MANIFEST_NAME"
+    fi
     echo ""
     
     echo "========================================="
