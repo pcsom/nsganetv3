@@ -1,4 +1,21 @@
+def _normalize_model_name(model):
+    if model is None:
+        raise ValueError('predictor model name is required')
+
+    model_name = str(model).strip().lower().replace('-', '_').replace(' ', '_')
+    aliases = {
+        'adaptive_switching': 'as',
+        'adaptive_switching_ensemble': 'as',
+        'adaptive': 'as',
+        'cart': 'carts',
+        'carts': 'carts',
+        'random_forest': 'carts',
+    }
+    return aliases.get(model_name, model_name)
+
+
 def get_acc_predictor(model, inputs, targets):
+    model = _normalize_model_name(model)
 
     if model == 'rbf':
         from acc_predictor.rbf import RBF
@@ -29,4 +46,16 @@ def get_acc_predictor(model, inputs, targets):
         raise NotImplementedError
 
     return acc_predictor
+
+
+def get_acc_predictor_from_config(config, inputs, targets):
+    if isinstance(config, str):
+        model = config
+    elif isinstance(config, dict):
+        search_cfg = config.get('search', config)
+        model = search_cfg.get('predictor', config.get('predictor'))
+    else:
+        model = getattr(config, 'predictor', None)
+
+    return get_acc_predictor(model, inputs, targets)
 

@@ -530,7 +530,6 @@ if __name__ == '__main__':
     parser.add_argument('--supernet_path', type=str, required=True,
                         help='file path to supernet weights')
     
-    # Optional overrides
     parser.add_argument('--offline_data', type=str, default=None,
                         help='path to CSV containing offline evaluated architectures (bypasses initial OFAEvaluator)')
     parser.add_argument('--resume', type=str, default=None,
