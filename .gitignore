@@ -5,7 +5,20 @@ __pycache__/
 .tmp/
 .idea
 ipynb/
-#subnets/
+.torch/
+.nfs*
+*.log
+*.err
+quick_test_output/
+/checkpoints/
+checkpoints/
+20*/
+test_corpus_*/
+*_corpus_*/
+setup_log.txt
+download_cifar.py
+test_imports.py
+
 # C extensions
 *.so
 .DS_Store
@@ -139,3 +152,12 @@ dmypy.json
 .pyre/
 /pretrained/
 .idea
+test_corpus_*/
+training_corpus/
+corpus_*/
+quick_test.log
+quick_test.err
+production_*/
+fresh_test/
+status.json
+test_verify.sh

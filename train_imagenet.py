@@ -2,12 +2,15 @@
 """
 Modified from https://github.com/rwightman/pytorch-image-models/blob/master/train.py
 """
+import os
 import time
 import yaml
 import json
+import logging
 import warnings
 import argparse
 from datetime import datetime
+from collections import OrderedDict
 
 try:
     from apex import amp
@@ -18,7 +21,8 @@ except ImportError:
     from torch.nn.parallel import DistributedDataParallel as DDP
     has_apex = False
 
-from timm.data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mixup_batch, AugMixDataset
+from timm.data import ImageDataset as Dataset, create_loader, resolve_data_config, AugMixDataset
+from timm.data.mixup import Mixup
 from timm.models import create_model, resume_checkpoint, convert_splitbn_model
 from timm.utils import *
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy, JsdCrossEntropy
@@ -31,7 +35,7 @@ import torchvision.utils
 import torch.nn.functional as F
 
 from codebase.networks import NSGANetV2
-from ofa.imagenet_codebase.utils import cross_entropy_loss_with_soft_target
+from ofa.utils import cross_entropy_loss_with_soft_target
 
 warnings.simplefilter("ignore")
 torch.backends.cudnn.benchmark = True
@@ -252,9 +256,39 @@ def main():
     torch.manual_seed(args.seed + args.rank)
 
     net_config = json.load(open(args.model_config))
-    model = NSGANetV2.build_from_config(net_config, drop_connect_rate=args.drop_path)
-    init = torch.load(args.initial_checkpoint, map_location='cpu')['state_dict']
-    model.load_state_dict(init)
+    
+    if 'ks' in net_config and 'd' in net_config and 'e' in net_config:
+        from ofa.imagenet_classification.elastic_nn.networks import OFAMobileNetV3
+        from evaluator import OFAEvaluator
+        
+        ofa_network = OFAMobileNetV3(
+            n_classes=1000,
+            dropout_rate=0,
+            width_mult=1.0,
+            ks_list=[3, 5, 7],
+            expand_ratio_list=[3, 4, 6],
+            depth_list=[2, 3, 4],
+        )
+        init = torch.load(args.initial_checkpoint, map_location='cpu')['state_dict']
+        ofa_network.load_state_dict(init)
+        
+        subnet_cfg = {
+            'ks': net_config['ks'],
+            'e': net_config['e'],
+            'd': net_config['d']
+        }
+        ofa_network.set_active_subnet(**subnet_cfg)
+        model = ofa_network.get_active_subnet(preserve_weight=True)
+        
+        if args.reset_classifier or (args.num_classes != 1000):
+            from codebase.networks.nsganetv2 import NSGANetV2
+            NSGANetV2.reset_classifier(
+                model, last_channel=model.classifier.in_features,
+                n_classes=args.num_classes, dropout_rate=args.drop)
+    else:
+        model = NSGANetV2.build_from_config(net_config, drop_connect_rate=args.drop_path)
+        init = torch.load(args.initial_checkpoint, map_location='cpu')['state_dict']
+        model.load_state_dict(init)
 
     if args.reset_classifier:
         NSGANetV2.reset_classifier(
@@ -265,6 +299,7 @@ def main():
     dummy_model = create_model('efficientnet_b0')
 
     # add a teacher model
+    teacher = None
     if args.teacher:
         # using the supernet at full scale to supervise the training of the subnets
         # this is taken from https://github.com/mit-han-lab/once-for-all/blob/
@@ -337,7 +372,7 @@ def main():
 
     model_ema = None
     if args.model_ema:
-        # Important to create EMA model after cuda(), DP wrapper, and AMP but before SyncBN and DDP wrapper
+        # Create EMA model after cuda(), DP wrapper, and AMP but before SyncBN and DDP wrapper
         model_ema = ModelEma(
             model,
             decay=args.model_ema_decay,
@@ -470,7 +505,7 @@ def main():
         ])
         output_dir = get_outdir(output_base, 'train', exp_name)
         decreasing = True if eval_metric == 'loss' else False
-        saver = CheckpointSaver(checkpoint_dir=output_dir, decreasing=decreasing)
+        saver = CheckpointSaver(model=model, optimizer=optimizer, checkpoint_dir=output_dir, decreasing=decreasing)
         with open(os.path.join(output_dir, 'args.yaml'), 'w') as f:
             f.write(args_text)
 
@@ -511,8 +546,7 @@ def main():
                 # save proper checkpoint with eval metric
                 save_metric = eval_metrics[eval_metric]
                 best_metric, best_epoch = saver.save_checkpoint(
-                    model, optimizer, args,
-                    epoch=epoch, model_ema=model_ema, metric=save_metric, use_amp=use_amp)
+                    epoch=epoch, metric=save_metric)
 
     except KeyboardInterrupt:
         pass
