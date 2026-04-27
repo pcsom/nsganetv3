@@ -11,18 +11,21 @@ n_iter = 8
 sec_obj = "flops"
 # Which surrogate model to use (rbf/gp/cart/mlp/as)
 predictor = "as"
+evaluation_mode = "virtual"
 
 [dataset]
-# Dataset name (imagenet/cifar10/cifar100/etc)
-dataset = "imagenet"
+# Dataset name (flowers102/cifar10/cifar100/etc)
+dataset = "flowers102"
 # Number of classes in the dataset
-n_classes = 1000
+n_classes = 102
 # Number of training epochs for architectures
 n_epochs = 5
 # Validation set size (randomly sampled from training set)
-vld_size = 10000
+vld_size = 408
 # Evaluate on test set after training
 test = false
+# Offline ground truth CSV used to bootstrap archive
+ground_truth_csv = "data/flowers102_ground_truth.csv"
 
 [training]
 # Training batch size
@@ -54,7 +57,7 @@ memory = "24GB"
 # Job time limit for evaluation
 job_time = "08:00:00"
 # Conda environment name
-env_name = "nas"
+env_name = "nsganetv2-llm"
 # Allowed GPU types
 gpu_types = ["V100-16GB", "V100-32GB", "L40S", "A100-40GB", "H100", "A40", "H200"]
 

@@ -1,14 +1,11 @@
 import numpy as np
 import scipy.stats as stats
 from acc_predictor.factory import get_acc_predictor
-
-
 def _get_correlation(prediction, target):
     rmse = np.sqrt(((prediction - target) ** 2).mean())
     rho, _ = stats.spearmanr(prediction, target)
     tau, _ = stats.kendalltau(prediction, target)
     return rmse, rho, tau
-
 
 class AdaptiveSwitching:
     """ ensemble surrogate model """
@@ -51,15 +48,32 @@ class AdaptiveSwitching:
         scores = mean_tau - std_tau
         scores[~np.isfinite(scores)] = -np.inf
 
-        winner = int(np.argmax(scores))
-        if not np.isfinite(scores[winner]):
+        ranked_candidates = np.argsort(scores)[::-1]
+        ranked_candidates = [idx for idx in ranked_candidates if np.isfinite(scores[idx])]
+        if not ranked_candidates:
             raise RuntimeError('All adaptive switching candidates failed during cross-validation.')
-        print("winner model = {}, tau = {}".format(self.model_pool[winner],
-                                                   mean_tau[winner]))
-        self.winner = self.model_pool[winner]
-        # re-fit the winner model with entire data
-        acc_predictor = get_acc_predictor(self.model_pool[winner], train_data, train_target)
-        self.model = acc_predictor
+        selected_idx = None
+        selected_model = None
+        for candidate_idx in ranked_candidates:
+            candidate_name = self.model_pool[candidate_idx]
+            try:
+                candidate_model = get_acc_predictor(candidate_name, train_data, train_target)
+                probe_count = min(max(1, n), len(train_data))
+                probe_data = train_data[:probe_count]
+                candidate_model.predict(probe_data)
+                selected_idx = candidate_idx
+                selected_model = candidate_model
+                break
+            except Exception:
+                continue
+
+        if selected_model is None:
+            raise RuntimeError('All adaptive switching candidates failed during full-data fit.')
+
+        print("winner model = {}, tau = {}".format(self.model_pool[selected_idx],
+                                                   mean_tau[selected_idx]))
+        self.winner = self.model_pool[selected_idx]
+        self.model = selected_model
 
     def predict(self, test_data):
         return self.model.predict(test_data)

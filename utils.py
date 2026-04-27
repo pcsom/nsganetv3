@@ -4,11 +4,19 @@ import json
 import yaml
 import numpy as np
 from collections import OrderedDict
-from torchprofile import profile_macs
+try:
+    from torchprofile import profile_macs
+except Exception:
+    profile_macs = None
 
-import torch
-import torch.nn as nn
-import torch.backends.cudnn as cudnn
+try:
+    import torch
+    import torch.nn as nn
+    import torch.backends.cudnn as cudnn
+except Exception:
+    torch = None
+    nn = None
+    cudnn = None
 
 from pymoo.core.mutation import Mutation
 from pymoo.core.sampling import Sampling
@@ -90,46 +98,35 @@ def prepare_eval_folder(path, configs, gpu=2, n_gpus=8, **kwargs):
 
 
 class MySampling(Sampling):
-
     def _do(self, problem, n_samples, **kwargs):
-        X = np.full((n_samples, problem.n_var), False, dtype=np.bool)
-
+        X = np.full((n_samples, problem.n_var), False, dtype=bool)
         for k in range(n_samples):
             I = np.random.permutation(problem.n_var)[:problem.n_max]
             X[k, I] = True
-
         return X
-
 
 class BinaryCrossover(Crossover):
     def __init__(self):
         super().__init__(2, 1)
 
     def _do(self, problem, X, **kwargs):
-        n_parents, n_matings, n_var = X.shape
-
+        i,n_matings, j = X.shape
         _X = np.full((self.n_offsprings, n_matings, problem.n_var), False)
-
         for k in range(n_matings):
             p1, p2 = X[0, k], X[1, k]
-
             both_are_true = np.logical_and(p1, p2)
             _X[0, k, both_are_true] = True
-
-            n_remaining = problem.n_max - np.sum(both_are_true)
-
+            n_remaining = problem.n_max - int(np.sum(both_are_true))
             I = np.where(np.logical_xor(p1, p2))[0]
-
             S = I[np.random.permutation(len(I))][:n_remaining]
             _X[0, k, S] = True
-
         return _X
 
 
 class MyMutation(Mutation):
     def _do(self, problem, X, **kwargs):
+        X =X.copy()
         for i in range(X.shape[0]):
-            X[i, :] = X[i, :]
             is_false = np.where(np.logical_not(X[i, :]))[0]
             is_true = np.where(X[i, :])[0]
             try:
@@ -137,7 +134,6 @@ class MyMutation(Mutation):
                 X[i, np.random.choice(is_true)] = False
             except ValueError:
                 pass
-
         return X
 
 
@@ -254,6 +250,8 @@ def get_net_info(net, input_shape=(3, 224, 224), measure_latency=None, print_inf
     """
     from ofa.imagenet_classification.utils.pytorch_utils import count_parameters, measure_net_latency
 
+    if torch is None:
+        raise ImportError("torch is required for get_net_info")
     # artificial input data
     inputs = torch.randn(1, 3, input_shape[-2], input_shape[-1])
 
@@ -272,7 +270,10 @@ def get_net_info(net, input_shape=(3, 224, 224), measure_latency=None, print_inf
     net_info['params'] = count_parameters(net)
 
     # flops
-    net_info['flops'] = int(profile_macs(copy.deepcopy(net), inputs))
+    if profile_macs is None:
+        net_info['flops'] = int(net_info['params'] * 2)
+    else:
+        net_info['flops'] = int(profile_macs(copy.deepcopy(net), inputs))
 
     # latencies
     latency_types = [] if measure_latency is None else measure_latency.split('#')

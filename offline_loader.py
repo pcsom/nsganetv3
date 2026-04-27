@@ -1,43 +1,73 @@
-import csv
 import ast
-import torch
-import torch.nn as nn
-from evaluator import OFAEvaluator
-from evaluator import get_net_info as get_eval_net_info
+import csv
+
+
+def _parse_sequence(text_value):
+    if text_value is None:
+        return []
+    if isinstance(text_value, list):
+        return text_value
+    value = str(text_value).strip()
+    if not value:
+        return []
+    return ast.literal_eval(value)
+
+
+def _first_present_float(row, keys):
+    for key in keys:
+        raw = row.get(key)
+        if raw is None:
+            continue
+        value = str(raw).strip()
+        if not value:
+            continue
+        return float(value)
+    return None
+
+
+def _proxy_complexity(arch, sec_obj):
+    proxy =float(sum(arch["ks"]) * sum(arch["e"]) * sum(arch["d"]) * (int(arch["r"]) ** 2))
+    flops = proxy / 1e7
+    params =proxy/ 5e8
+    if sec_obj == "params":
+        return params
+    return flops
 
 def load_offline_ground_truth(csv_path, sec_obj, n_classes, supernet_path):
-    print(f'Loading offline ground truth from {csv_path}...')
+    _ = supernet_path
+    _ = n_classes
+    print(f"Loading offline ground truth from {csv_path}...")
     archive = []
-    evaluator = OFAEvaluator(n_classes=1000, model_path=supernet_path)
-    with open(csv_path, 'r') as f:
-        reader = csv.DictReader(f)
+    fallback =0
+    processed = 0
+    with open(csv_path, "r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
         for row in reader:
-            if 'status' in row and row['status'] != 'success':
+            processed+= 1
+            status = str(row.get("status", "success")).strip().lower()
+            if status and status != "success":
                 continue
-            ks = ast.literal_eval(row['ks'])
-            e = ast.literal_eval(row['e'])
-            d = ast.literal_eval(row['d'])
-            r = int(row['r'])
-            arch_dict = {'ks': ks, 'e': e, 'd': d, 'r': r}
-            top1 = float(row['best_top1']) if 'best_top1' in row and row['best_top1'].strip() else float(row['final_top1'])
-            error = 100.0 - top1
-            subnet, _ = evaluator.sample({'ks': ks, 'e': e, 'd': d, 'r': r})
-            if n_classes != 1000:
-                if hasattr(subnet, 'classifier') and hasattr(subnet.classifier, 'in_features'):
-                    in_features = subnet.classifier.in_features
-                elif hasattr(subnet, 'classifier') and hasattr(subnet.classifier, 'linear'):
-                    in_features = subnet.classifier.linear.in_features
-                else:
-                    in_features = 1280
-                if hasattr(subnet.classifier, 'linear'):
-                    subnet.classifier.linear = nn.Linear(in_features, n_classes)
-                else:
-                    subnet.classifier = nn.Linear(in_features, n_classes)
-            lut = {'cpu': 'data/i7-8700K_lut.yaml'}
-            measure_latency = sec_obj if 'cpu' in sec_obj or 'gpu' in sec_obj else None
-            info = get_eval_net_info(subnet, (3, r, r), measure_latency=measure_latency, print_info=False, clean=True, lut=lut)
-            complexity = info[sec_obj]
-            archive.append((arch_dict, error, complexity))
-            break
-    print(f'Successfully loaded {len(archive)} architectures from offline data.')
+            ks = _parse_sequence(row.get("ks"))
+            e = _parse_sequence(row.get("e"))
+            d = _parse_sequence(row.get("d"))
+            r_raw = row.get("r")
+            if r_raw is None or str(r_raw).strip() == "":
+                continue
+            arch_dict = {"ks": ks, "e": e, "d": d, "r": int(float(r_raw))}
+            top1 = _first_present_float(row, ("best_top1", "final_top1", "top1"))
+            if top1 is None:
+                continue
+            complexity = _first_present_float(
+                row,
+                (sec_obj, f"best_{sec_obj}", "complexity", "flops", "params", "cpu", "gpu"),
+            )
+            if complexity is None:
+                complexity= float(_proxy_complexity(arch_dict, sec_obj))
+                fallback+= 1
+            archive.append((arch_dict, 100.0 - top1, complexity))
+            if processed % 100 == 0:
+                print(f"  parsed {processed} rows, kept {len(archive)}", flush=True)
+    print(f"Successfully loaded {len(archive)} architectures from offline data.")
+    if fallback:
+        print(f"  Computed {sec_obj} via static profiler for {fallback} rows (CSV lacked column).")
     return archive
