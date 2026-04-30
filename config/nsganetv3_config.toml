@@ -6,7 +6,7 @@ iterations = 30
 # Initial sample size for design of experiments (DOE)
 n_doe = 100
 # Number of architectures to evaluate in each iteration
-n_iter = 8
+n_iter = 50
 # Secondary objective to optimize (flops/params/cpu/gpu)
 sec_obj = "flops"
 # Which surrogate model to use (rbf/gp/cart/mlp/as)
@@ -37,9 +37,9 @@ n_workers = 4
 
 [evolutionary]
 # Population size for candidate selection optimization
-pop_size = 40
+pop_size = 150
 # Number of generations for candidate selection
-n_gens = 20
+n_gens = 100
 # Crossover probability for integer two-point crossover
 crossover_prob = 0.9
 # Mutation eta parameter for integer polynomial mutation
@@ -55,7 +55,7 @@ cores = 8
 # Memory per job
 memory = "24GB"
 # Job time limit for evaluation
-job_time = "08:00:00"
+job_time = "18:00:00"
 # Conda environment name
 env_name = "nsganetv2-llm"
 # Allowed GPU types

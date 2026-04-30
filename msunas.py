@@ -144,11 +144,25 @@ class MSuNAS:
         import glob
 
         archive = []
-        for file in glob.glob(os.path.join(self.resume, "net_*.subnet")):
+        net_files = glob.glob(os.path.join(self.resume, "net_*.subnet"))
+        for file in net_files:
             arch = json.load(open(file))
             pre, ext = os.path.splitext(file)
             stats = json.load(open(pre + ".stats"))
             archive.append((arch, 100 - stats['top1'], stats[self.sec_obj]))
+        if archive:
+            return archive
+        iter_files = glob.glob(os.path.join(self.resume, "iter_*.stats"))
+        if iter_files:
+            def _iter_num(path):
+                base = os.path.basename(path)
+                return int(base.split("_")[1].split(".")[0])
+            latest = max(iter_files, key=_iter_num)
+            payload = json.load(open(latest, "r", encoding="utf-8"))
+            for row in payload.get("archive", []):
+                if len(row) >= 3:
+                    archive.append((row[0], float(row[1]), float(row[2])))
+            self._log(f"resumed {len(archive)} archive entries from {latest}")
 
         return archive
 
