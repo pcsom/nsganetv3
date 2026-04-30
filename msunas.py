@@ -16,6 +16,8 @@ from pymoo.factory import get_algorithm, get_crossover, get_mutation
 
 from search_space.ofa import OFASearchSpace
 from acc_predictor.factory import get_acc_predictor
+from surrogate_features import SurrogateFeaturePipeline
+from child_pool import generate_unique_child_pool, stable_arch_key
 from utils import prepare_eval_folder, MySampling, BinaryCrossover, MyMutation
 
 _DEBUG = False
@@ -25,6 +27,17 @@ if _DEBUG: from pymoo.visualization.scatter import Scatter
 class MSuNAS:
     def __init__(self, kwargs):
         self.search_space = OFASearchSpace()
+        self.feature_repr = kwargs.pop('feature_repr', 'ofa')
+        self.cole_model = kwargs.pop('cole_model', 'sentence-transformers/all-MiniLM-L6-v2')
+        self.cole_pca_components = kwargs.pop('cole_pca_components', None)
+        if self.cole_pca_components is not None:
+            self.cole_pca_components = int(self.cole_pca_components)
+        self.feature_pipeline = SurrogateFeaturePipeline(
+            search_space=self.search_space,
+            feature_repr=self.feature_repr,
+            cole_model=self.cole_model,
+            cole_pca_components=self.cole_pca_components,
+        )
         self.save_path = kwargs.pop('save', '.tmp')  # path to save results
         self.resume = kwargs.pop('resume', None)  # resume search from a checkpoint
         self.sec_obj = kwargs.pop('sec_obj', 'flops')  # second objective to optimize simultaneously
@@ -46,6 +59,23 @@ class MSuNAS:
         self.supernet_path = kwargs.pop(
             'supernet_path', './data/ofa_mbv3_d234_e346_k357_w1.0')  # supernet model path
         self.latency = self.sec_obj if "cpu" in self.sec_obj or "gpu" in self.sec_obj else None
+
+        # Candidate proposal: NSGA-II on surrogate (paper default) vs large child pool + surrogate ranking
+        _cm = kwargs.pop('candidate_mode', None)
+        self.candidate_mode = _cm if _cm is not None else 'nsga2'
+        _cps = kwargs.pop('child_pool_size', None)
+        self.child_pool_size = int(_cps if _cps is not None else 256)
+        _ps = kwargs.pop('pool_selection', None)
+        self.pool_selection = _ps if _ps is not None else 'topk'
+        _pts = kwargs.pop('pool_tournament_size', None)
+        self.pool_tournament_size = int(_pts if _pts is not None else 3)
+        self.pool_seed = kwargs.pop('pool_seed', None)
+        _pcp = kwargs.pop('pool_crossover_prob', None)
+        self.pool_crossover_prob = float(_pcp if _pcp is not None else 0.9)
+        _pm = kwargs.pop('pool_mutation_prob', None)
+        self.pool_mutation_prob = None if _pm is None else float(_pm)
+        self._pool_complexity_engine = None
+        self._pool_complexity_cache = {}
 
     def search(self):
 
@@ -173,7 +203,7 @@ class MSuNAS:
         return top1_err, complexity
 
     def _fit_acc_predictor(self, archive):
-        inputs = np.array([self.search_space.encode(x[0]) for x in archive])
+        inputs = self.feature_pipeline.fit_archs([x[0] for x in archive])
         targets = np.array([x[1] for x in archive])
         assert len(inputs) > len(inputs[0]), "# of training samples have to be > # of dimensions"
 
@@ -183,36 +213,37 @@ class MSuNAS:
 
     def _next(self, archive, predictor, K):
         """ searching for next K candidate for high-fidelity evaluation (lower level) """
+        if self.candidate_mode == 'pool':
+            return self._next_child_pool(archive, predictor, K)
+        return self._next_nsga2(archive, predictor, K)
 
-        # the following lines corresponding to Algo 1 line 10 / Fig. 3(b) in the paper
-        # get non-dominated architectures from archive
+    def _next_nsga2(self, archive, predictor, K):
+        """NSGA-II on (predicted error, cheap complexity) — original MSuNAS / NSGANet-style."""
         F = np.column_stack(([x[1] for x in archive], [x[2] for x in archive]))
         front = NonDominatedSorting().do(F, only_non_dominated_front=True)
-        # non-dominated arch bit-strings
         nd_X = np.array([self.search_space.encode(x[0]) for x in archive])[front]
 
-        # initialize the candidate finding optimization problem
         problem = AuxiliarySingleLevelProblem(
-            self.search_space, predictor, self.sec_obj,
+            self.search_space, predictor, self.sec_obj, self.feature_pipeline,
             {'n_classes': self.n_classes, 'model_path': self.supernet_path})
 
-        # initiate a multi-objective solver to optimize the problem
+        pop_size = getattr(self, '_ev_pop_size', 40)
+        n_gens = getattr(self, '_ev_n_gens', 20)
+        cx_prob = getattr(self, '_ev_crossover_prob', 0.9)
+        mut_eta = getattr(self, '_ev_mutation_eta', 1.0)
+
         method = get_algorithm(
-            "nsga2", pop_size=40, sampling=nd_X,  # initialize with current nd archs
-            crossover=get_crossover("int_two_point", prob=0.9),
-            mutation=get_mutation("int_pm", eta=1.0),
+            "nsga2", pop_size=pop_size, sampling=nd_X,
+            crossover=get_crossover("int_two_point", prob=cx_prob),
+            mutation=get_mutation("int_pm", eta=mut_eta),
             eliminate_duplicates=True)
 
-        # kick-off the search
         res = minimize(
-            problem, method, termination=('n_gen', 20), save_history=True, verbose=True)
-        
-        # check for duplicates
+            problem, method, termination=('n_gen', n_gens), save_history=True, verbose=True)
+
         not_duplicate = np.logical_not(
             [x in [x[0] for x in archive] for x in [self.search_space.decode(x) for x in res.pop.get("X")]])
 
-        # the following lines corresponding to Algo 1 line 11 / Fig. 3(c)-(d) in the paper
-        # form a subset selection problem to short list K from pop_size
         indices = self._subset_selection(res.pop[not_duplicate], F[front, 1], K)
         pop = res.pop[not_duplicate][indices]
 
@@ -220,8 +251,157 @@ class MSuNAS:
         for x in pop.get("X"):
             candidates.append(self.search_space.decode(x))
 
-        # decode integer bit-string to config and also return predicted top1_err
-        return candidates, predictor.predict(pop.get("X"))
+        return candidates, predictor.predict(self.feature_pipeline.transform_encoded(pop.get("X")))
+
+    def _next_child_pool(self, archive, predictor, K):
+        """
+        Generate a large offspring pool from Pareto-front parents, predict fitness with the
+        surrogate only, then select K architectures (top-k or tournament) for evaluation.
+        """
+        F = np.column_stack(([x[1] for x in archive], [x[2] for x in archive]))
+        front = NonDominatedSorting().do(F, only_non_dominated_front=True)
+        nd_X = np.array([self.search_space.encode(x[0]) for x in archive])[front]
+
+        archive_keys = {stable_arch_key(x[0]) for x in archive}
+        rng = np.random.default_rng(self.pool_seed)
+
+        pool_X = generate_unique_child_pool(
+            nd_X,
+            self.search_space,
+            self.child_pool_size,
+            rng,
+            crossover_prob=self.pool_crossover_prob,
+            mutation_prob=self.pool_mutation_prob,
+        )
+        if len(pool_X) < K:
+            raise RuntimeError(
+                f"child pool only has {len(pool_X)} unique individuals (need at least K={K}); "
+                "increase child_pool_size or max_attempts_multiplier")
+
+        pred_all = predictor.predict(self.feature_pipeline.transform_encoded(pool_X))
+
+        if self.pool_selection == 'topk':
+            chosen_idx = self._pool_select_topk(pool_X, pred_all, archive_keys, K)
+        elif self.pool_selection == 'tournament':
+            chosen_idx = self._pool_select_tournament(pool_X, pred_all, archive_keys, K, rng)
+        elif self.pool_selection == 'pareto':
+            chosen_idx = self._pool_select_pareto(pool_X, pred_all, archive_keys, K)
+        else:
+            raise ValueError(f"Unknown pool_selection: {self.pool_selection}")
+
+        chosen_X = pool_X[chosen_idx]
+        candidates = [self.search_space.decode(x) for x in chosen_X]
+        pred_chosen = pred_all[chosen_idx]
+        return candidates, pred_chosen
+
+    def _pool_select_topk(self, pool_X, pred, archive_keys, K):
+        order = np.argsort(pred.flatten())
+        picked_keys = set()
+        chosen = []
+        for idx in order:
+            key = stable_arch_key(self.search_space.decode(pool_X[idx]))
+            if key in archive_keys or key in picked_keys:
+                continue
+            chosen.append(idx)
+            picked_keys.add(key)
+            if len(chosen) >= K:
+                return np.array(chosen, dtype=np.int64)
+        raise RuntimeError(
+            "Could not select K unique candidates not already in archive (topk); "
+            "try a larger child_pool_size or different pool_selection.")
+
+    def _pool_select_tournament(self, pool_X, pred, archive_keys, K, rng):
+        n = len(pool_X)
+        ts = max(2, min(self.pool_tournament_size, n))
+        picked_keys = set()
+        chosen = []
+        max_rounds = max(K * 50, 5000)
+        for _ in range(max_rounds):
+            if len(chosen) >= K:
+                break
+            contenders = rng.choice(n, size=ts, replace=False)
+            best_idx = contenders[np.argmin(pred.flatten()[contenders])]
+            key = stable_arch_key(self.search_space.decode(pool_X[best_idx]))
+            if key in archive_keys or key in picked_keys:
+                continue
+            chosen.append(best_idx)
+            picked_keys.add(key)
+        if len(chosen) < K:
+            raise RuntimeError(
+                "Could not select K unique candidates (tournament); "
+                "try a larger child_pool_size or tournament size.")
+        return np.array(chosen[:K], dtype=np.int64)
+
+    def _pool_select_pareto(self, pool_X, pred, archive_keys, K):
+        """Multi-objective pool selection on (predicted error, sec_obj complexity)."""
+        complexity = self._predict_pool_complexity(pool_X)
+        F = np.column_stack((pred.flatten(), complexity))
+        fronts = NonDominatedSorting().do(F)
+
+        picked_keys = set()
+        selected = []
+        for front in fronts:
+            remaining = K - len(selected)
+            if remaining <= 0:
+                break
+            front = np.array(front, dtype=np.int64)
+            # Favor less crowded points only when front overflows remaining slots.
+            if len(front) > remaining:
+                cd = self._crowding_distance(F[front])
+                front = front[np.argsort(-cd)]
+            for idx in front:
+                key = stable_arch_key(self.search_space.decode(pool_X[idx]))
+                if key in archive_keys or key in picked_keys:
+                    continue
+                selected.append(int(idx))
+                picked_keys.add(key)
+                if len(selected) >= K:
+                    break
+        if len(selected) < K:
+            raise RuntimeError(
+                "Could not select K unique candidates in pareto mode; "
+                "try a larger child_pool_size.")
+        return np.array(selected[:K], dtype=np.int64)
+
+    @staticmethod
+    def _crowding_distance(F):
+        n, m = F.shape
+        if n <= 2:
+            return np.full(n, np.inf)
+        dist = np.zeros(n, dtype=np.float64)
+        for j in range(m):
+            order = np.argsort(F[:, j])
+            f = F[order, j]
+            dist[order[0]] = np.inf
+            dist[order[-1]] = np.inf
+            denom = f[-1] - f[0]
+            if denom <= 0:
+                continue
+            for i in range(1, n - 1):
+                dist[order[i]] += (f[i + 1] - f[i - 1]) / denom
+        return dist
+
+    def _predict_pool_complexity(self, pool_X):
+        if self._pool_complexity_engine is None:
+            self._pool_complexity_engine = OFAEvaluator(
+                n_classes=self.n_classes, model_path=self.supernet_path
+            )
+        complexity = np.full(len(pool_X), np.nan, dtype=np.float64)
+        lut = {'cpu': 'data/i7-8700K_lut.yaml'}
+        for i, x in enumerate(pool_X):
+            cfg = self.search_space.decode(x)
+            key = stable_arch_key(cfg)
+            if key in self._pool_complexity_cache:
+                complexity[i] = self._pool_complexity_cache[key]
+                continue
+            subnet, _ = self._pool_complexity_engine.sample({'ks': cfg['ks'], 'e': cfg['e'], 'd': cfg['d']})
+            info = get_net_info(
+                subnet, (3, cfg['r'], cfg['r']),
+                measure_latency=self.sec_obj, print_info=False, clean=True, lut=lut
+            )
+            complexity[i] = info[self.sec_obj]
+            self._pool_complexity_cache[key] = complexity[i]
+        return complexity
 
     @staticmethod
     def _subset_selection(pop, nd_F, K):
@@ -250,11 +430,12 @@ class MSuNAS:
 class AuxiliarySingleLevelProblem(Problem):
     """ The optimization problem for finding the next N candidate architectures """
 
-    def __init__(self, search_space, predictor, sec_obj='flops', supernet=None):
+    def __init__(self, search_space, predictor, sec_obj='flops', feature_pipeline=None, supernet=None):
         super().__init__(n_var=46, n_obj=2, n_constr=0, type_var=np.int)
 
         self.ss = search_space
         self.predictor = predictor
+        self.feature_pipeline = feature_pipeline
         self.xl = np.zeros(self.n_var)
         self.xu = 2 * np.ones(self.n_var)
         self.xu[-1] = int(len(self.ss.resolution) - 1)
@@ -268,7 +449,11 @@ class AuxiliarySingleLevelProblem(Problem):
     def _evaluate(self, x, out, *args, **kwargs):
         f = np.full((x.shape[0], self.n_obj), np.nan)
 
-        top1_err = self.predictor.predict(x)[:, 0]  # predicted top1 error
+        if self.feature_pipeline is not None:
+            x_feat = self.feature_pipeline.transform_encoded(x)
+        else:
+            x_feat = x
+        top1_err = self.predictor.predict(x_feat)[:, 0]  # predicted top1 error
 
         for i, (_x, err) in enumerate(zip(x, top1_err)):
             config = self.ss.decode(_x)
@@ -327,6 +512,26 @@ if __name__ == '__main__':
                         help='number of architectures to high-fidelity eval (low level) in each iteration')
     parser.add_argument('--predictor', type=str, default='rbf',
                         help='which accuracy predictor model to fit (rbf/gp/cart/mlp/as)')
+    parser.add_argument('--feature_repr', type=str, default='ofa', choices=['ofa', 'cole'],
+                        help='surrogate feature representation (ofa/cole)')
+    parser.add_argument('--cole_model', type=str, default='sentence-transformers/all-MiniLM-L6-v2',
+                        help='sentence-transformers model name for COLE embeddings')
+    parser.add_argument('--cole_pca_components', type=int, default=None,
+                        help='optional PCA components for COLE features')
+    parser.add_argument('--candidate_mode', type=str, default='nsga2', choices=['nsga2', 'pool'],
+                        help='nsga2: NSGA-II on surrogate; pool: many offspring + surrogate rank')
+    parser.add_argument('--child_pool_size', type=int, default=256,
+                        help='number of unique offspring in pool mode (before selection)')
+    parser.add_argument('--pool_selection', type=str, default='topk', choices=['topk', 'tournament', 'pareto'],
+                        help='how to pick K evaluated candidates from the pool')
+    parser.add_argument('--pool_tournament_size', type=int, default=3,
+                        help='tournament size when pool_selection=tournament')
+    parser.add_argument('--pool_seed', type=int, default=None,
+                        help='RNG seed for child pool generation (optional)')
+    parser.add_argument('--pool_crossover_prob', type=float, default=0.9,
+                        help='crossover probability when mating pool parents')
+    parser.add_argument('--pool_mutation_prob', type=float, default=None,
+                        help='per-gene mutation prob in pool mode (default 1/n_var)')
     parser.add_argument('--n_gpus', type=int, default=8,
                         help='total number of available gpus')
     parser.add_argument('--gpu', type=int, default=1,

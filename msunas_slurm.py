@@ -12,17 +12,11 @@ import toml
 from utils import get_correlation
 from evaluator import OFAEvaluator, get_net_info
 
-from pymoo.optimize import minimize
-from pymoo.model.problem import Problem
-from pymoo.factory import get_performance_indicator
-from pymoo.algorithms.so_genetic_algorithm import GA
-from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
-from pymoo.factory import get_algorithm, get_crossover, get_mutation
-
 from search_space.ofa import OFASearchSpace
 from acc_predictor.factory import get_acc_predictor
+from surrogate_features import SurrogateFeaturePipeline
 from utils import MySampling, BinaryCrossover, MyMutation
-from msunas import MSuNAS, AuxiliarySingleLevelProblem, SubsetProblem
+from msunas import MSuNAS
 
 _DEBUG = False
 if _DEBUG: from pymoo.visualization.scatter import Scatter
@@ -41,7 +35,11 @@ class MSuNASSLURM(MSuNAS):
     """SLURM-adapted version of MSuNAS for HPC cluster execution"""
     
     def __init__(self, kwargs, config_path=None):
-        super().__init__(kwargs)
+        base_kwargs = {
+            k: v for k, v in kwargs.items()
+            if v is not None
+        }
+        super().__init__(base_kwargs)
         
         # Load TOML configuration
         if config_path and os.path.exists(config_path):
@@ -56,6 +54,22 @@ class MSuNASSLURM(MSuNAS):
         
         # Override config with any command line arguments
         self._update_config_from_kwargs(kwargs)
+        surrogate_cfg = self.config.get('surrogate', {})
+        self.feature_repr = kwargs.get('feature_repr') or surrogate_cfg.get('feature_repr', self.feature_repr)
+        self.cole_model = kwargs.get('cole_model') or surrogate_cfg.get('cole_model', self.cole_model)
+        self.cole_pca_components = (
+            kwargs.get('cole_pca_components')
+            if kwargs.get('cole_pca_components') is not None
+            else surrogate_cfg.get('cole_pca_components', self.cole_pca_components)
+        )
+        if self.cole_pca_components == 0:
+            self.cole_pca_components = None
+        self.feature_pipeline = SurrogateFeaturePipeline(
+            search_space=self.search_space,
+            feature_repr=self.feature_repr,
+            cole_model=self.cole_model,
+            cole_pca_components=self.cole_pca_components,
+        )
         
         self.job_name = f'{JOB_NAME}_{os.path.basename(self.save_path)}'
         self.logs_dir = os.path.join(self.save_path, 'logs')
@@ -63,6 +77,27 @@ class MSuNASSLURM(MSuNAS):
         
         # Save search configuration for evaluation scripts
         self._save_search_config()
+
+        evo = self.config.get('evolutionary', {})
+        self._ev_pop_size = evo.get('pop_size', 40)
+        self._ev_n_gens = evo.get('n_gens', 20)
+        self._ev_crossover_prob = evo.get('crossover_prob', 0.9)
+        self._ev_mutation_eta = evo.get('mutation_eta', 1.0)
+        if 'candidate_mode' in evo:
+            self.candidate_mode = evo['candidate_mode']
+        if 'child_pool_size' in evo:
+            self.child_pool_size = int(evo['child_pool_size'])
+        if 'pool_selection' in evo:
+            self.pool_selection = evo['pool_selection']
+        if 'pool_tournament_size' in evo:
+            self.pool_tournament_size = int(evo['pool_tournament_size'])
+        if 'pool_seed' in evo and evo['pool_seed'] is not None:
+            self.pool_seed = int(evo['pool_seed'])
+        if 'pool_crossover_prob' in evo:
+            self.pool_crossover_prob = float(evo['pool_crossover_prob'])
+        if 'pool_mutation_prob' in evo:
+            pm = evo['pool_mutation_prob']
+            self.pool_mutation_prob = None if pm is None else float(pm)
     
     def _get_default_config(self):
         """Return default configuration if no TOML file found"""
@@ -90,7 +125,14 @@ class MSuNASSLURM(MSuNAS):
                 'pop_size': 40,
                 'n_gens': 20,
                 'crossover_prob': 0.9,
-                'mutation_eta': 1.0
+                'mutation_eta': 1.0,
+                'candidate_mode': 'nsga2',
+                'child_pool_size': 256,
+                'pool_selection': 'topk',
+                'pool_tournament_size': 3,
+                'pool_crossover_prob': 0.9,
+                'pool_mutation_prob': None,
+                'pool_seed': None,
             },
             'slurm': {
                 'job_name': 'nsganetv3',
@@ -104,7 +146,10 @@ class MSuNASSLURM(MSuNAS):
             'surrogate': {
                 'enable_gpu_training': True,
                 'train_job_time': '02:00:00',
-                'train_memory': '16GB'
+                'train_memory': '16GB',
+                'feature_repr': 'ofa',
+                'cole_model': 'sentence-transformers/all-MiniLM-L6-v2',
+                'cole_pca_components': 0
             }
         }
     
@@ -114,18 +159,22 @@ class MSuNASSLURM(MSuNAS):
         search_mapping = ['iterations', 'n_doe', 'n_iter', 'sec_obj', 'predictor']
         dataset_mapping = ['dataset', 'n_classes', 'n_epochs', 'vld_size', 'test']
         training_mapping = ['trn_batch_size', 'vld_batch_size', 'n_workers']
+        surrogate_mapping = ['feature_repr', 'cole_model', 'cole_pca_components']
         
         for key in search_mapping:
-            if hasattr(self, key):
-                self.config['search'][key] = getattr(self, key)
+            if key in kwargs and kwargs.get(key) is not None:
+                self.config['search'][key] = kwargs.get(key)
         
         for key in dataset_mapping:
-            if hasattr(self, key):
-                self.config['dataset'][key] = getattr(self, key)
+            if key in kwargs and kwargs.get(key) is not None:
+                self.config['dataset'][key] = kwargs.get(key)
                 
         for key in training_mapping:
-            if hasattr(self, key):
-                self.config['training'][key] = getattr(self, key)
+            if key in kwargs and kwargs.get(key) is not None:
+                self.config['training'][key] = kwargs.get(key)
+        for key in surrogate_mapping:
+            if key in kwargs and kwargs.get(key) is not None:
+                self.config['surrogate'][key] = kwargs.get(key)
             
     def _save_search_config(self):
         """Save search configuration for evaluation scripts"""
@@ -255,53 +304,12 @@ conda run -n {self.config['slurm']['env_name']} --no-capture-output python -u ev
     
     def _fit_acc_predictor(self, archive):
         """Fit accuracy predictor - simplified version without GPU training for now"""
-        inputs = np.array([self.search_space.encode(x[0]) for x in archive])
+        inputs = self.feature_pipeline.fit_archs([x[0] for x in archive])
         targets = np.array([x[1] for x in archive])
         assert len(inputs) > len(inputs[0]), "# of training samples have to be > # of dimensions"
 
         acc_predictor = get_acc_predictor(self.config['search']['predictor'], inputs, targets)
         return acc_predictor, acc_predictor.predict(inputs)
-    
-    def _next(self, archive, predictor, K):
-        """Override parent method to use config values"""
-        # Get non-dominated architectures from archive
-        F = np.column_stack(([x[1] for x in archive], [x[2] for x in archive]))
-        front = NonDominatedSorting().do(F, only_non_dominated_front=True)
-        nd_X = np.array([self.search_space.encode(x[0]) for x in archive])[front]
-
-        # Initialize the candidate finding optimization problem
-        problem = AuxiliarySingleLevelProblem(
-            self.search_space, predictor, self.config['search']['sec_obj'],
-            {'n_classes': self.config['dataset']['n_classes'], 'model_path': self.supernet_path})
-
-        # Initiate multi-objective solver with config values
-        method = get_algorithm(
-            "nsga2", 
-            pop_size=self.config['evolutionary']['pop_size'], 
-            sampling=nd_X,
-            crossover=get_crossover("int_two_point", prob=self.config['evolutionary']['crossover_prob']),
-            mutation=get_mutation("int_pm", eta=self.config['evolutionary']['mutation_eta']),
-            eliminate_duplicates=True)
-
-        # Run optimization
-        res = minimize(
-            problem, method, 
-            termination=('n_gen', self.config['evolutionary']['n_gens']), 
-            save_history=True, verbose=True)
-        
-        # Check for duplicates and select candidates
-        not_duplicate = np.logical_not(
-            [x in [x[0] for x in archive] for x in [self.search_space.decode(x) for x in res.pop.get("X")]])
-
-        # Form subset selection problem
-        indices = self._subset_selection(res.pop[not_duplicate], F[front, 1], K)
-        pop = res.pop[not_duplicate][indices]
-
-        candidates = []
-        for x in pop.get("X"):
-            candidates.append(self.search_space.decode(x))
-
-        return candidates, predictor.predict(pop.get("X"))
 
     def _create_eval_input_csv(self, archs, filepath, iteration):
         """Create CSV input file for SLURM job array"""
@@ -480,7 +488,7 @@ conda run -n {self.config['slurm']['env_name']} python -u {script_path} {iterati
 
     def _fit_acc_predictor(self, archive):
         """Fit accuracy predictor using SLURM job for surrogate training if needed"""
-        inputs = np.array([self.search_space.encode(x[0]) for x in archive])
+        inputs = self.feature_pipeline.fit_archs([x[0] for x in archive])
         targets = np.array([x[1] for x in archive])
         assert len(inputs) > len(inputs[0]), "# of training samples have to be > # of dimensions"
 
@@ -505,12 +513,20 @@ conda run -n {self.config['slurm']['env_name']} python -u {script_path} {iterati
 
 def main(args):
     """Main function with SLURM-specific argument parsing"""
-    # Convert args to kwargs for MSuNASSLURM
-    kwargs = vars(args)
+    kwargs = vars(args).copy()
     config_path = kwargs.pop('config', None)
-    
-    # Create and run SLURM-enabled MSuNAS
+
     engine = MSuNASSLURM(kwargs, config_path=config_path)
+
+    if getattr(args, 'candidate_mode', None) is not None:
+        engine.candidate_mode = args.candidate_mode
+    if getattr(args, 'child_pool_size', None) is not None:
+        engine.child_pool_size = int(args.child_pool_size)
+    if getattr(args, 'pool_selection', None) is not None:
+        engine.pool_selection = args.pool_selection
+    if getattr(args, 'pool_tournament_size', None) is not None:
+        engine.pool_tournament_size = int(args.pool_tournament_size)
+
     engine.search()
     return
 
@@ -541,6 +557,20 @@ if __name__ == '__main__':
                         help='name of the dataset (imagenet, cifar10, cifar100, ...)')
     parser.add_argument('--predictor', type=str, default=None,
                         help='which accuracy predictor model to fit (rbf/gp/cart/mlp/as)')
+    parser.add_argument('--feature_repr', type=str, default='ofa', choices=['ofa', 'cole'],
+                        help='surrogate feature representation (ofa/cole)')
+    parser.add_argument('--cole_model', type=str, default='sentence-transformers/all-MiniLM-L6-v2',
+                        help='sentence-transformers model name for COLE embeddings')
+    parser.add_argument('--cole_pca_components', type=int, default=None,
+                        help='optional PCA components for COLE features')
+    parser.add_argument('--candidate_mode', type=str, default=None, choices=['nsga2', 'pool'],
+                        help='override: nsga2 or pool (many children + surrogate rank)')
+    parser.add_argument('--child_pool_size', type=int, default=None,
+                        help='override: pool size when candidate_mode=pool')
+    parser.add_argument('--pool_selection', type=str, default=None, choices=['topk', 'tournament', 'pareto'],
+                        help='override: topk, tournament, or pareto selection from pool')
+    parser.add_argument('--pool_tournament_size', type=int, default=None,
+                        help='override: tournament size')
     parser.add_argument('--n_epochs', type=int, default=None,
                         help='number of epochs for CNN training')
     parser.add_argument('--test', action='store_true', default=False,
