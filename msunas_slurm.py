@@ -35,7 +35,11 @@ class MSuNASSLURM(MSuNAS):
     """SLURM-adapted version of MSuNAS for HPC cluster execution"""
     
     def __init__(self, kwargs, config_path=None):
-        super().__init__(kwargs)
+        base_kwargs = {
+            k: v for k, v in kwargs.items()
+            if v is not None
+        }
+        super().__init__(base_kwargs)
         
         # Load TOML configuration
         if config_path and os.path.exists(config_path):
@@ -158,20 +162,19 @@ class MSuNASSLURM(MSuNAS):
         surrogate_mapping = ['feature_repr', 'cole_model', 'cole_pca_components']
         
         for key in search_mapping:
-            if hasattr(self, key):
-                self.config['search'][key] = getattr(self, key)
+            if key in kwargs and kwargs.get(key) is not None:
+                self.config['search'][key] = kwargs.get(key)
         
         for key in dataset_mapping:
-            if hasattr(self, key):
-                self.config['dataset'][key] = getattr(self, key)
+            if key in kwargs and kwargs.get(key) is not None:
+                self.config['dataset'][key] = kwargs.get(key)
                 
         for key in training_mapping:
-            if hasattr(self, key):
-                self.config['training'][key] = getattr(self, key)
+            if key in kwargs and kwargs.get(key) is not None:
+                self.config['training'][key] = kwargs.get(key)
         for key in surrogate_mapping:
-            value = getattr(self, key, None)
-            if value is not None:
-                self.config['surrogate'][key] = value
+            if key in kwargs and kwargs.get(key) is not None:
+                self.config['surrogate'][key] = kwargs.get(key)
             
     def _save_search_config(self):
         """Save search configuration for evaluation scripts"""

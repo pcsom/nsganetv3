@@ -1,0 +1,48 @@
+[search]
+iterations = 30
+n_doe = 100
+n_iter = 8
+sec_obj = "flops"
+predictor = "as"
+
+[dataset]
+dataset = "imagenet"
+n_classes = 1000
+n_epochs = 0
+vld_size = 10000
+test = false
+
+[training]
+trn_batch_size = 128
+vld_batch_size = 200
+n_workers = 4
+
+[evolutionary]
+pop_size = 40
+n_gens = 20
+crossover_prob = 0.9
+mutation_eta = 1.0
+candidate_mode = "pool"
+child_pool_size = 512
+pool_selection = "pareto"
+pool_tournament_size = 3
+pool_crossover_prob = 0.9
+pool_mutation_prob = 0.02
+pool_seed = 42
+
+[slurm]
+job_name = "nsganetv3"
+nodes = 1
+cores = 8
+memory = "24GB"
+job_time = "08:00:00"
+env_name = "nas"
+gpu_types = ["V100-16GB", "V100-32GB", "L40S", "A100-40GB", "H100", "A40", "H200"]
+
+[surrogate]
+enable_gpu_training = true
+train_job_time = "02:00:00"
+train_memory = "16GB"
+feature_repr = "ofa"
+cole_model = "sentence-transformers/all-MiniLM-L6-v2"
+cole_pca_components = 0
