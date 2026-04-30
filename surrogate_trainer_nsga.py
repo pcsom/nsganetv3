@@ -11,6 +11,7 @@ import json
 import argparse
 import numpy as np
 from acc_predictor.factory import get_acc_predictor
+from surrogate_features import SurrogateFeaturePipeline
 
 
 def load_training_data(save_path, iteration):
@@ -56,14 +57,14 @@ def load_training_data(save_path, iteration):
     return archive_data
 
 
-def train_surrogate_models(archive_data, predictor_type, search_space):
+def train_surrogate_models(archive_data, predictor_type, feature_pipeline):
     """Train accuracy predictor models"""
     if len(archive_data) == 0:
         print("Warning: No training data available")
         return None, None
     
     # Encode architectures and extract targets
-    inputs = np.array([search_space.encode(x[0]) for x in archive_data])
+    inputs = feature_pipeline.fit_archs([x[0] for x in archive_data])
     targets = np.array([x[1] for x in archive_data])  # Top-1 error rates
     
     print(f"Training {predictor_type} surrogate with {len(inputs)} samples")
@@ -117,6 +118,12 @@ def main():
     parser.add_argument('save_path', type=str, help='Base save directory')
     parser.add_argument('--predictor', type=str, default='rbf', 
                        help='Predictor type (rbf/gp/cart/mlp/as)')
+    parser.add_argument('--feature_repr', type=str, default='ofa', choices=['ofa', 'cole',
+                       ], help='surrogate feature representation (ofa/cole)')
+    parser.add_argument('--cole_model', type=str, default='sentence-transformers/all-MiniLM-L6-v2',
+                       help='sentence-transformers model name for COLE embeddings')
+    parser.add_argument('--cole_pca_components', type=int, default=None,
+                       help='optional PCA components for COLE features')
     args = parser.parse_args()
     
     print(f"Training surrogate models for iteration {args.iteration}")
@@ -127,6 +134,12 @@ def main():
     try:
         from search_space.ofa import OFASearchSpace
         search_space = OFASearchSpace()
+        feature_pipeline = SurrogateFeaturePipeline(
+            search_space=search_space,
+            feature_repr=args.feature_repr,
+            cole_model=args.cole_model,
+            cole_pca_components=args.cole_pca_components,
+        )
     except ImportError:
         print("Error: Could not import OFASearchSpace")
         sys.exit(1)
@@ -140,7 +153,7 @@ def main():
     
     # Train surrogate model
     acc_predictor, predictions = train_surrogate_models(
-        archive_data, args.predictor, search_space
+        archive_data, args.predictor, feature_pipeline
     )
     
     if acc_predictor is None:
