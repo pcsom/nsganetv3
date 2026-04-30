@@ -45,7 +45,7 @@ mutation_eta = 1.0
 candidate_mode = "nsga2"
 # Unique offspring pool size before selecting K for evaluation (pool mode only)
 child_pool_size = 256
-# "topk" or "tournament" — pick K from pool using surrogate-predicted error
+# "topk", "tournament", or "pareto" (predicted error + complexity)
 pool_selection = "topk"
 pool_tournament_size = 3
 

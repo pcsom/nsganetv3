@@ -74,6 +74,8 @@ class MSuNAS:
         self.pool_crossover_prob = float(_pcp if _pcp is not None else 0.9)
         _pm = kwargs.pop('pool_mutation_prob', None)
         self.pool_mutation_prob = None if _pm is None else float(_pm)
+        self._pool_complexity_engine = None
+        self._pool_complexity_cache = {}
 
     def search(self):
 
@@ -282,6 +284,8 @@ class MSuNAS:
             chosen_idx = self._pool_select_topk(pool_X, pred_all, archive_keys, K)
         elif self.pool_selection == 'tournament':
             chosen_idx = self._pool_select_tournament(pool_X, pred_all, archive_keys, K, rng)
+        elif self.pool_selection == 'pareto':
+            chosen_idx = self._pool_select_pareto(pool_X, pred_all, archive_keys, K)
         else:
             raise ValueError(f"Unknown pool_selection: {self.pool_selection}")
 
@@ -327,6 +331,77 @@ class MSuNAS:
                 "Could not select K unique candidates (tournament); "
                 "try a larger child_pool_size or tournament size.")
         return np.array(chosen[:K], dtype=np.int64)
+
+    def _pool_select_pareto(self, pool_X, pred, archive_keys, K):
+        """Multi-objective pool selection on (predicted error, sec_obj complexity)."""
+        complexity = self._predict_pool_complexity(pool_X)
+        F = np.column_stack((pred.flatten(), complexity))
+        fronts = NonDominatedSorting().do(F)
+
+        picked_keys = set()
+        selected = []
+        for front in fronts:
+            remaining = K - len(selected)
+            if remaining <= 0:
+                break
+            front = np.array(front, dtype=np.int64)
+            # Favor less crowded points only when front overflows remaining slots.
+            if len(front) > remaining:
+                cd = self._crowding_distance(F[front])
+                front = front[np.argsort(-cd)]
+            for idx in front:
+                key = stable_arch_key(self.search_space.decode(pool_X[idx]))
+                if key in archive_keys or key in picked_keys:
+                    continue
+                selected.append(int(idx))
+                picked_keys.add(key)
+                if len(selected) >= K:
+                    break
+        if len(selected) < K:
+            raise RuntimeError(
+                "Could not select K unique candidates in pareto mode; "
+                "try a larger child_pool_size.")
+        return np.array(selected[:K], dtype=np.int64)
+
+    @staticmethod
+    def _crowding_distance(F):
+        n, m = F.shape
+        if n <= 2:
+            return np.full(n, np.inf)
+        dist = np.zeros(n, dtype=np.float64)
+        for j in range(m):
+            order = np.argsort(F[:, j])
+            f = F[order, j]
+            dist[order[0]] = np.inf
+            dist[order[-1]] = np.inf
+            denom = f[-1] - f[0]
+            if denom <= 0:
+                continue
+            for i in range(1, n - 1):
+                dist[order[i]] += (f[i + 1] - f[i - 1]) / denom
+        return dist
+
+    def _predict_pool_complexity(self, pool_X):
+        if self._pool_complexity_engine is None:
+            self._pool_complexity_engine = OFAEvaluator(
+                n_classes=self.n_classes, model_path=self.supernet_path
+            )
+        complexity = np.full(len(pool_X), np.nan, dtype=np.float64)
+        lut = {'cpu': 'data/i7-8700K_lut.yaml'}
+        for i, x in enumerate(pool_X):
+            cfg = self.search_space.decode(x)
+            key = stable_arch_key(cfg)
+            if key in self._pool_complexity_cache:
+                complexity[i] = self._pool_complexity_cache[key]
+                continue
+            subnet, _ = self._pool_complexity_engine.sample({'ks': cfg['ks'], 'e': cfg['e'], 'd': cfg['d']})
+            info = get_net_info(
+                subnet, (3, cfg['r'], cfg['r']),
+                measure_latency=self.sec_obj, print_info=False, clean=True, lut=lut
+            )
+            complexity[i] = info[self.sec_obj]
+            self._pool_complexity_cache[key] = complexity[i]
+        return complexity
 
     @staticmethod
     def _subset_selection(pop, nd_F, K):
@@ -447,7 +522,7 @@ if __name__ == '__main__':
                         help='nsga2: NSGA-II on surrogate; pool: many offspring + surrogate rank')
     parser.add_argument('--child_pool_size', type=int, default=256,
                         help='number of unique offspring in pool mode (before selection)')
-    parser.add_argument('--pool_selection', type=str, default='topk', choices=['topk', 'tournament'],
+    parser.add_argument('--pool_selection', type=str, default='topk', choices=['topk', 'tournament', 'pareto'],
                         help='how to pick K evaluated candidates from the pool')
     parser.add_argument('--pool_tournament_size', type=int, default=3,
                         help='tournament size when pool_selection=tournament')

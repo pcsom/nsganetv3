@@ -564,8 +564,8 @@ if __name__ == '__main__':
                         help='override: nsga2 or pool (many children + surrogate rank)')
     parser.add_argument('--child_pool_size', type=int, default=None,
                         help='override: pool size when candidate_mode=pool')
-    parser.add_argument('--pool_selection', type=str, default=None, choices=['topk', 'tournament'],
-                        help='override: topk or tournament selection from pool')
+    parser.add_argument('--pool_selection', type=str, default=None, choices=['topk', 'tournament', 'pareto'],
+                        help='override: topk, tournament, or pareto selection from pool')
     parser.add_argument('--pool_tournament_size', type=int, default=None,
                         help='override: tournament size')
     parser.add_argument('--n_epochs', type=int, default=None,
