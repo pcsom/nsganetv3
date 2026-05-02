@@ -213,8 +213,11 @@ class MSuNAS:
         not_duplicate =np.array([d not in archive_archs for d in decoded])
         if not np.any(not_duplicate):
             not_duplicate= np.ones(len(decoded), dtype=bool)
-        indices = self._subset_selection(res.pop[not_duplicate], F[front, 1], K)
-        pop = res.pop[not_duplicate][indices]
+        uniq_pop = res.pop[not_duplicate]
+        uniq_indices = self._subset_selection(uniq_pop, F[front, 1], K)
+        if uniq_indices.size == 0:
+            uniq_indices = np.arange(min(K, len(uniq_pop)), dtype=int)
+        pop = uniq_pop[uniq_indices]
         candidates = [self.search_space.decode(np.asarray(x_).astype(int)) for x_ in pop.get("X")]
         x_int= np.asarray(pop.get("X")).astype(int)
         return candidates,predictor.predict(x_int)
@@ -227,10 +230,15 @@ class MSuNAS:
             mutation=MyMutation(), eliminate_duplicates=True)
         res = minimize(problem, algorithm, ('n_gen', 60), verbose=False)
         mask = np.asarray(res.X, dtype=bool).reshape(-1)
-        if mask.sum()== 0:
-            mask =np.zeros_like(mask, dtype=bool)
-            mask[: min(K, mask.size)] = True
-        return mask
+        n = len(pop)
+        if mask.size != n:
+            return np.arange(min(K, n), dtype=int)
+        selected = np.flatnonzero(mask)
+        if selected.size == 0:
+            return np.arange(min(K, n), dtype=int)
+        if selected.size > K:
+            selected = selected[:K]
+        return selected
 
     @staticmethod
     def _calc_hv(ref_pt, F, normalized=True):
